@@ -34,22 +34,25 @@ pthread_t  tidglb;
 
 void *makeconnection(void *arg){
 	
-	struct sockaddr_in *servaddr =(struct sockaddr_in *)arg;      //  un puntatore
+  //  un puntatore
 	struct sockaddr_in servaddrrcv;
 	packet pac,pacrcv;
 	srand(time(NULL));
-	int n,len =sizeof(servaddr);
+	int n,len =sizeof(struct sockaddr_in);
 	int32_t r = rand(); //numero della sequenza
 	memset((void *)&pac,0,sizeof(packet));
 	// inizializzazione del pacchetto
+	printf("lo stato e: %d\n",state);
 	pac.seqnumb=r;
 	pac.flags.syn=1;
-	if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *) servaddr,len ) < 0) {
-		perror("errore in sendto");
+	if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)arg, len ) < 0) {
+		perror("errore in sendto 1");
 		exit(1);
 	}
 	state = SYN_SEND;
+	printf("lo stato e: %d\n",state);
 	while(state != ESTABLISHED){
+		printf("lo stato e: %d\n",state);
 		n = recvfrom(sockfdglb,(void *)&pacrcv, sizeof(packet), 0 ,(struct sockaddr *) &servaddrrcv,&len ); // ************checkare se viene dallo stesso indirizzo ip********
 		if (n < 0) {
 			perror("errore in recvfrom");
@@ -57,13 +60,14 @@ void *makeconnection(void *arg){
 		}
 		if(pacrcv.flags.ack == 1 && pacrcv.flags.syn == 1){
 			state = ESTABLISHED;
+			printf("lo stato e (dovrebbe essere establish): %d\n",state);
 			memset((void *)&pac,0,sizeof(packet));
 			pac.seqnumb = r;
 			pac.flags.ack = 1;
-			pac.seqnumb = r;
+			pac.flags.syn=0;
 			pac.acknumb = pacrcv.seqnumb + 1;
-			if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *) servaddr, sizeof(servaddr)) < 0) {
-				perror("errore in sendto");
+			if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)arg , len) < 0) {
+				perror("errore in sendto 2");
 				exit(1);
 			}
 		}
