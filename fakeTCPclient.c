@@ -34,6 +34,8 @@ pthread_t  tidglb;
 
 void *makeconnection(void *arg){
 	
+	
+	printf("dentro la funione della connessione\n"); 
   //  un puntatore
 	struct sockaddr_in servaddrrcv;
 	packet pac,pacrcv;
@@ -42,7 +44,7 @@ void *makeconnection(void *arg){
 	int32_t r = rand(); //numero della sequenza
 	memset((void *)&pac,0,sizeof(packet));
 	// inizializzazione del pacchetto
-	printf("lo stato e: %d\n",state);
+	
 	pac.seqnumb=r;
 	pac.flags.syn=1;
 	if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)arg, len ) < 0) {
@@ -52,7 +54,7 @@ void *makeconnection(void *arg){
 	state = SYN_SEND;
 	printf("lo stato e: %d\n",state);
 	while(state != ESTABLISHED){
-		printf("lo stato e: %d\n",state);
+		
 		n = recvfrom(sockfdglb,(void *)&pacrcv, sizeof(packet), 0 ,(struct sockaddr *) &servaddrrcv,&len ); // ************checkare se viene dallo stesso indirizzo ip********
 		if (n < 0) {
 			perror("errore in recvfrom");
@@ -60,7 +62,6 @@ void *makeconnection(void *arg){
 		}
 		if(pacrcv.flags.ack == 1 && pacrcv.flags.syn == 1){
 			state = ESTABLISHED;
-			printf("lo stato e (dovrebbe essere establish): %d\n",state);
 			memset((void *)&pac,0,sizeof(packet));
 			pac.seqnumb = r;
 			pac.flags.ack = 1;
@@ -83,13 +84,11 @@ void delete(int sig){
 	
 	
 	if(state!=ESTABLISHED){
-		pthread_kill(tidglb, SIGKILL);
+		printf("dentro la funzione che cancella l pid; %ld\n",tidglb);
+		pthread_cancel(tidglb);
 		state=CLOSED;
 	}
-		
-		
-	
-	
+
 	
 }
 
@@ -135,16 +134,17 @@ void *myconnect(void *arg){
 	
 	}
 	//metto la sveglia
-	alarm(10);
+	
 	
 	while(state!=ESTABLISHED){
-		
+		alarm(3);
+		printf("dentro il while della richiesta\n");
 		if(pthread_create(&tid,NULL,makeconnection, arg)!=0){//metti gli argmenti 
 			exit(1);
 		}
 		
 		tidglb=tid;
-		
+		printf("tidglb ha questo tid: %ld\n",tidglb);
 		if((pthread_join(tid, &status) ) == -1){
 	         exit(1);  //gestisci lo stato e l errore 
             }
