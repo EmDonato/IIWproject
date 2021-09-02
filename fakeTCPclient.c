@@ -22,7 +22,11 @@
 #define SYN_SEND 1
 #define ESTABLISHED 2
 
-
+/* dentro al main vi e la creazione el attesa del thread che andra ad occuparsi della connessone, ovvero il "my connaction". 
+Quest'ultimo e implementato in modo tale da farsi consegnare il segnale SIGALARM ogni 3 secondi, per tentare di ritentare la connessione
+se il server non trasmette l ack del syn. la gestione del segnale e compito della funzione delete, la quale va a cancellare il thread maeconnection, 
+il thread che implementa verametelo scambio di pacchetti, quest ultimo thread manda pacchetti e cambia lo stato del client, fino a quando non e ESTABLISHED 
+attende l ack del server, se lo riceve cambia stato e invia il pacchetto di conferma */
 
 
 volatile int state=CLOSED;
@@ -35,8 +39,7 @@ pthread_t  tidglb;
 void *makeconnection(void *arg){
 	
 	
-	printf("dentro la funione della connessione\n"); 
-  //  un puntatore
+	//printf("dentro la funione della connessione\n"); 
 	struct sockaddr_in servaddrrcv;
 	packet pac,pacrcv;
 	srand(time(NULL));
@@ -133,12 +136,12 @@ void *myconnect(void *arg){
 		exit(1);
 	
 	}
-	//metto la sveglia
 	
+	// mi cerco di connettere fino a quando la connessione non e stabilita
 	
 	while(state!=ESTABLISHED){
+		//metto la sveglia
 		alarm(3);
-		printf("dentro il while della richiesta\n");
 		if(pthread_create(&tid,NULL,makeconnection, arg)!=0){//metti gli argmenti 
 			exit(1);
 		}
@@ -222,6 +225,6 @@ int main(int argc, char *argv[ ]) {
       exit(1);
     }
   }
-  exit(0); */
- 
+   */
+ exit(0);
 }
