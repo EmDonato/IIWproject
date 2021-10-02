@@ -113,25 +113,21 @@ int foundAndDetroy(struct sockaddr_in *addr,int x){
 			accepted[x].sin_addr.s_addr = addr->sin_addr.s_addr;
 			ausiliarAccepted[x] = true;
 
-			return 0;
+			return 1;
 		}
 	}
-	return 1;
+	return 0;
 
 }
 
 
 void *mylisten(void *arg){
 	
-/* 	printf("dentro il my listen\n");
+	printf("dentro il my listen\n");
 	fflush(stdout);
-	if ((semID = semget(semkey, 1, IPC_CREAT|0666)) == -1)
-		goto exit_process_1;
-	
-	if (semctl(semID, 0, SETVAL, 0) == -1)
-		goto exit_process_1;
+
 	struct sembuf buf[1];
-	 */
+	
 	
 	
 	
@@ -200,10 +196,12 @@ void *mylisten(void *arg){
 			if((foundresult=found(&addr,1)) > -1){
 				if(foundAndDetroy(&addr, foundresult)){
 					//aumento il semaforo di uno
-/* 					buf[0].sem_num = 0;
+					printf("fatto il found and destroy\n");
+					buf[0].sem_num = 0;
 					buf[0].sem_op = 1;
 					buf[0].sem_flg = 0;
-					semop(semID, buf, 1); */
+					semop(semID, buf, 1);
+					printf("\n\n********************dato il token del semaforo nell mylisten***************\n\n");
 					printf("completato l handshake\n");
 				}
 				else{
@@ -234,13 +232,10 @@ void *mylisten(void *arg){
 		
 		}		
 	}
-	exit_process_1:
-		semctl(semID, -1, IPC_RMID, 0);
 
-	exit_process_4:
-		exit(1);
 }
 
+//*******************************************errore in bind argomenti*******************************
 
 int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
 	
@@ -248,12 +243,16 @@ int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
 	struct sockaddr_in addrpers;
 	int i = 0, IDsock;
 	struct sembuf buf[1];
+	printf("\n\n********************in attesa del token del semaforo nell accept***************\n\n");
 	buf[0].sem_num = 0;
 	buf[0].sem_op = -1;
 	buf[0].sem_flg = 0;
 	semop(semID, buf, 1);
+	printf("\n\n********************preso il token del semaforo nell accept***************\n\n");
 	while(ausiliarAccepted[i] == false)
 		i++;
+	printf("\n\n********************trovato la connessione in posizione: %d***************\n\n",i);
+
 	addr->sin_port = accepted[i].sin_port;
 	addr->sin_addr.s_addr = accepted[i].sin_addr.s_addr;
 	*addrlen = sizeof(accepted[i]);
@@ -270,10 +269,10 @@ int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
 	addrpers.sin_port = htons(SERV_PORT); /* numero di porta del server */
 	
 	  /* assegna l'indirizzo al socket */
-	if (bind(sockfd, (struct sockaddr *)&addrpers, sizeof(addrpers)) < 0) {
+/* 	if (bind(IDsock, (struct sockaddr *)&addrpers, sizeof(addrpers)) < 0) {
 		perror("errore in bind");
 		exit(1);
-	}	
+	} */	 
 	return IDsock;
 	
 }
@@ -281,8 +280,8 @@ int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
 
 void shutout(int sig){
 	
-	
-	// semctl(semID, -1, IPC_RMID, 0);
+	printf("\n\n********************entrato nel gestore del segnale SIGINT***************\n\n");
+	semctl(semID, -1, IPC_RMID, 0);
 	exit(1);
 	
 }
@@ -301,7 +300,13 @@ int main(int argc, char **argv){
 	sigset_t set;
 	packet pacchetto;
 	char *strstr = "HELLO WORLD\n";
-
+	if ((semID = semget(semkey, 1, IPC_CREAT|0666)) == -1)
+		goto exit_process_1;
+	
+	if (semctl(semID, 0, SETVAL, 0) == -1)
+		goto exit_process_1;
+	
+	
 	/*
 		Gestione del segnale SIGINT
 
@@ -337,30 +342,39 @@ int main(int argc, char **argv){
 		exit(1);
 	}
 	printf("sgfdhjklò\n");
-/* 	while(1){
- 		connsd = myaccept(sockfd,&client,&clientlen);
-		if ( (pid = fork()) == 0) {
-			close(sockfd);
-			// manda un pacchetto per vedere se sei connesso 
-			pacchetto.seqnumb=1242;
-			pacchetto.acknumb=21513;
-			pacchetto.flags.headlen=10;
-			pacchetto.flags.ack=0;
-			pacchetto.flags.rst=0;
-			pacchetto.flags.syn=1;
-			pacchetto.flags.fin=0;
-			for(i=0;i<strlen("HELLO WORLD\n");i++){
-				pacchetto.data[i]=strstr[i];
-			}
-			if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&addr, len ) < 0) {
-				perror("errore in sendto 1");
-				exit(1); // attemzione
-			}			
+	
+	
+	connsd = myaccept(sockfd,&client,&clientlen);
+	if ( (pid = fork()) == 0) {
+		printf("\n\n*******************nel processo figlio*************\n\n");
+		printf("il cliente da servire ha l IP: %d\nPORTA: %d\n",client.sin_addr.s_addr,client.sin_port);
+		//close(sockfd);
+		// manda un pacchetto per vedere se sei connesso 
+		memset((void *)&pacchetto, 0, sizeof(packet));
+
+		pacchetto.seqnumb=1242;
+		pacchetto.acknumb=21513;
+		pacchetto.flags.headlen=10;
+		pacchetto.flags.ack=0;
+		pacchetto.flags.rst=0;
+		pacchetto.flags.syn=1;
+		pacchetto.flags.fin=0;
+/* 		for(i=0;i<strlen("HELLO WORLD\n");i++){
+			pacchetto.data[i]=strstr[i];
+		} */
+		if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, len ) < 0) {
+			perror("errore in sendto 1");
+			exit(1); // attemzione
+		}			
 		
-			
-		}
-		close(connsd); 
-	} */
+	}
+	//close(connsd); 
+	 
 	
 	pthread_join(tid, &value);
+	exit_process_1:
+		semctl(semID, -1, IPC_RMID, 0);
+
+	exit_process_4:
+		exit(1);
 }
