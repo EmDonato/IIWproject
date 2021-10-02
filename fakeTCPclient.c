@@ -58,7 +58,7 @@ void *makeconnection(void *arg){
 	printf("lo stato e: %d\n",state);
 	while(state != ESTABLISHED){
 		
-		n = recvfrom(sockfdglb,(void *)&pacrcv, sizeof(packet), 0 ,(struct sockaddr *) &servaddrrcv,&len ); // ************checkare se viene dallo stesso indirizzo ip********
+		n = recvfrom(sockfdglb,(void *)&pacrcv, sizeof(packet), 0 ,(struct sockaddr *)&servaddrrcv,&len ); // ************checkare se viene dallo stesso indirizzo ip********
 		if (n < 0) {
 			perror("errore in recvfrom");
 			exit(1);
@@ -164,67 +164,75 @@ void *myconnect(void *arg){
 
 
 int main(int argc, char *argv[ ]) {
-	
-  int   sockfd, n;
-  void *status;
-  pthread_t tid;
-  struct    sockaddr_in   servaddr;
 
-  if (argc != 2) { /* controlla numero degli argomenti */
-    fprintf(stderr, "utilizzo: daytime_clientUDP <indirizzo IP server>\n");
-    exit(1);
-  }
-
-  if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) { /* crea il socket */
-    perror("errore in socket");
-    exit(1);
-  }
-  sockfdglb=sockfd;
-
-  memset((void *)&servaddr, 0, sizeof(servaddr));      /* azzera servaddr */
-  servaddr.sin_family = AF_INET;       /* assegna il tipo di indirizzo */
-  servaddr.sin_port = htons(SERV_PORT);  /* assegna la porta del server */
-  /* assegna l'indirizzo del server prendendolo dalla riga di comando. L'indirizzo � una stringa da convertire in intero secondo network byte order. */
-  if (inet_pton(AF_INET, argv[1], &servaddr.sin_addr) <= 0) {
-                /* inet_pton (p=presentation) vale anche per indirizzi IPv6 */
-    fprintf(stderr, "errore in inet_pton per %s", argv[1]);
-    exit(1);
-  }
+	int   sockfd, n;
+	void *status;
+	pthread_t tid;
+	struct    sockaddr_in   servaddr;
+	packet packet;
+	memset((void *)&packet,0,sizeof(packet));
 
 
-//************ la connessione *******************
+	if (argc != 2) { /* controlla numero degli argomenti */
+	fprintf(stderr, "utilizzo: daytime_clientUDP <indirizzo IP server>\n");
+	exit(1);
+	}
+
+	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) { /* crea il socket */
+	perror("errore in socket");
+	exit(1);
+	}
+	sockfdglb=sockfd;
+
+	memset((void *)&servaddr, 0, sizeof(servaddr));      /* azzera servaddr */
+	servaddr.sin_family = AF_INET;       /* assegna il tipo di indirizzo */
+	servaddr.sin_port = htons(SERV_PORT);  /* assegna la porta del server */
+	/* assegna l'indirizzo del server prendendolo dalla riga di comando. L'indirizzo � una stringa da convertire in intero secondo network byte order. */
+	if (inet_pton(AF_INET, argv[1], &servaddr.sin_addr) <= 0) {
+				/* inet_pton (p=presentation) vale anche per indirizzi IPv6 */
+	fprintf(stderr, "errore in inet_pton per %s", argv[1]);
+	exit(1);
+	}
 
 
-  if(pthread_create(&tid,NULL,myconnect,(void *)&servaddr)!=0){//metti gli argmenti 
-     exit(1);
-   }
-  if((pthread_join(tid, &status) ) == -1){
+	//************ la connessione *******************
+
+
+	if(pthread_create(&tid,NULL,myconnect,(void *)&servaddr)!=0){//metti gli argmenti 
+	 exit(1);
+	}
+	if((pthread_join(tid, &status) ) == -1){
 	  exit(1);  //gestisci lo stato e l errore 
-  }
+	}
 
-  printf("la connessione e stabilita: %d\n",state);
+	printf("la connessione e stabilita: %d\n",state);
 
+	n = recvfrom(sockfd, (void *)&packet, sizeof(packet), 0 , NULL, NULL);
+	if (n < 0) {
+		perror("errore in recvfrom");
+		exit(1);
+	}
+	printf("il pacchetto ricevuto:\nSEQNUMB: %d\nSEQACK: %d\nACK: %d\nSYN: %d\nFIN: %d\n\nDATA: %s\n",packet.seqnumb,packet.acknumb,packet.flags.ack,packet.flags.syn,packet.flags.fin,packet.data);
 
+	/*  
+	if (sendto(sockfd, NULL, 0, 0, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
+	perror("errore in sendto");
+	exit(1);
+	}
 
+	n = recvfrom(sockfd, recvline, MAXLINE, 0 , NULL, NULL);
+	if (n < 0) {
+	perror("errore in recvfrom");
+	exit(1);
+	}
+	if (n > 0) {
+	recvline[n] = 0;        
+	if (fputs(recvline, stdout) == EOF)   {  
+	  fprintf(stderr, "errore in fputs");
+	  exit(1);
+	}
+	}
+	*/
+	exit(0);
 
-/*  
-  if (sendto(sockfd, NULL, 0, 0, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
-    perror("errore in sendto");
-    exit(1);
-  }
-
-  n = recvfrom(sockfd, recvline, MAXLINE, 0 , NULL, NULL);
-  if (n < 0) {
-    perror("errore in recvfrom");
-    exit(1);
-  }
-  if (n > 0) {
-    recvline[n] = 0;        
-    if (fputs(recvline, stdout) == EOF)   {  
-      fprintf(stderr, "errore in fputs");
-      exit(1);
-    }
-  }
-   */
- exit(0);
 }
