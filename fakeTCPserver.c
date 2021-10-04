@@ -19,7 +19,7 @@
 #define BACKLOG 10
 #define MAXLINE 1024
 #define N 10
-
+#define NEWSERV_PORT 5194
 
 // ******************************************************manda un  pacchetto per debug**********************************
 
@@ -109,6 +109,7 @@ int foundAndDetroy(struct sockaddr_in *addr,int x){
 			memset((void *)&syn_rcvd[i], 0, sizeof(struct sockaddr_in));
 			ausiliarSyn_rcvd[i] = false;
 			// lo metto nella connected
+			accepted[x].sin_family = AF_INET;
 			accepted[x].sin_port = addr->sin_port;
 			accepted[x].sin_addr.s_addr = addr->sin_addr.s_addr;
 			ausiliarAccepted[x] = true;
@@ -239,8 +240,9 @@ void *mylisten(void *arg){
 
 int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
 	
-	
 	struct sockaddr_in addrpers;
+	memset((void *)&addrpers, 0, sizeof(addrpers));
+
 	int i = 0, IDsock;
 	struct sembuf buf[1];
 	printf("\n\n********************in attesa del token del semaforo nell accept***************\n\n");
@@ -252,7 +254,7 @@ int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
 	while(ausiliarAccepted[i] == false)
 		i++;
 	printf("\n\n********************trovato la connessione in posizione: %d***************\n\n",i);
-
+	addr->sin_family = accepted[i].sin_family;
 	addr->sin_port = accepted[i].sin_port;
 	addr->sin_addr.s_addr = accepted[i].sin_addr.s_addr;
 	*addrlen = sizeof(accepted[i]);
@@ -262,17 +264,19 @@ int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
 		perror("errore in socket");
 		exit(1); 
 	}
-	
-	memset((void *)&addrpers, 0, sizeof(addrpers));
+	int reu =1;
+
+
+	if (setsockopt(IDsock, SOL_SOCKET, SO_REUSEADDR, &reu, sizeof(int)) < 0)
+		 perror("setsockopt(SO_REUSEADDR) failed");
+	  /* assegna l'indirizzo al socket */
 	addrpers.sin_family = AF_INET;
 	addrpers.sin_addr.s_addr = htonl(INADDR_ANY); /* il server accetta pacchetti su una qualunque delle sue interfacce di rete */
 	addrpers.sin_port = htons(SERV_PORT); /* numero di porta del server */
-	
-	  /* assegna l'indirizzo al socket */
-/* 	if (bind(IDsock, (struct sockaddr *)&addrpers, sizeof(addrpers)) < 0) {
+	if (bind(IDsock, (struct sockaddr *)&addrpers, sizeof(addrpers)) < 0) {
 		perror("errore in bind");
 		exit(1);
-	} */	 
+	}
 	return IDsock;
 	
 }
@@ -292,8 +296,8 @@ int main(int argc, char **argv){
 	pid_t pid;
 	pthread_t tid;
 	void *value;
-	struct sockaddr_in addr, client;
-	int len;
+	struct sockaddr_in addr, client;;
+	int len=sizeof(struct sockaddr_in);
 	socklen_t clientlen;
 	key_t keysem = 32145;
 	int lenLissen = sizeof(struct sockaddr_in);
@@ -319,6 +323,7 @@ int main(int argc, char **argv){
 	act.sa_handler = shutout;
 	sigaction(SIGINT,&act,NULL);
 
+	int reu =1;
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
 		perror("errore in socket");
@@ -330,6 +335,11 @@ int main(int argc, char **argv){
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = htonl(INADDR_ANY); /* il server accetta pacchetti su una qualunque delle sue interfacce di rete */
 	addr.sin_port = htons(SERV_PORT); /* numero di porta del server */
+	
+	
+	
+	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reu, sizeof(int)) < 0)
+		 perror("setsockopt(SO_REUSEADDR) failed");
 	
 	  /* assegna l'indirizzo al socket */
 	if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
@@ -346,9 +356,10 @@ int main(int argc, char **argv){
 	
 	connsd = myaccept(sockfd,&client,&clientlen);
 	if ( (pid = fork()) == 0) {
+	
 		printf("\n\n*******************nel processo figlio*************\n\n");
 		printf("il cliente da servire ha l IP: %d\nPORTA: %d\n",client.sin_addr.s_addr,client.sin_port);
-		//close(sockfd);
+		close(sockfd);
 		// manda un pacchetto per vedere se sei connesso 
 		memset((void *)&pacchetto, 0, sizeof(packet));
 
@@ -359,14 +370,14 @@ int main(int argc, char **argv){
 		pacchetto.flags.rst=0;
 		pacchetto.flags.syn=1;
 		pacchetto.flags.fin=0;
-/* 		for(i=0;i<strlen("HELLO WORLD\n");i++){
+ 		for(i=0;i<strlen("HELLO WORLD\n")+1;i++){
 			pacchetto.data[i]=strstr[i];
-		} */
+		} 
+		pacchetto.data[i]='\0';
 		if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, len ) < 0) {
-			perror("errore in sendto 1");
+			perror("errore in sendto34254");
 			exit(1); // attemzione
 		}			
-		
 	}
 	//close(connsd); 
 	 
