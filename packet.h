@@ -1,4 +1,9 @@
 #define MAXLINE     1024
+#define SERV_PORT 5193
+#define BACKLOG 10
+#define MAXLINE 1024
+#define N 10
+#define NEWSERV_PORT 519
 
 
 
@@ -14,3 +19,20 @@
 			}flags;
 	char data[MAXLINE];
 }packet;
+
+
+
+
+void shutout(int sig);
+
+
+int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen);
+
+
+void *mylisten(void *arg);
+
+
+int foundAndDetroy(struct sockaddr_in *addr,int x);
+
+
+int found(struct sockaddr_in *addr,int x);
