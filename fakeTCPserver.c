@@ -113,7 +113,6 @@ int foundAndDetroy(struct sockaddr_in *addr,int x){
 			accepted[x].sin_port = addr->sin_port;
 			accepted[x].sin_addr.s_addr = addr->sin_addr.s_addr;
 			ausiliarAccepted[x] = true;
-
 			return 1;
 		}
 	}
@@ -128,12 +127,6 @@ void *mylisten(void *arg){
 	fflush(stdout);
 
 	struct sembuf buf[1];
-	
-	
-	
-	
-	
-	printf("dentro il my listen\n");
 	
 	//prima cosa pulisco gli array dove conterro le connessioni
 	
@@ -159,7 +152,7 @@ void *mylisten(void *arg){
 		}
 		
 		//controllo il pacchetto che e arrivato
-		printf("wòibfjwkrabfpiqbwobèoufbq\n\n\n\n ");
+		printf("dentro il while del my listen\n\n\n\n ");
 
 		printf("il pacchetto arrivato e:\n numb:%d\nack:%d\nack:%d\nsyn:%d\n ",pacrcv.seqnumb,pacrcv.acknumb,pacrcv.flags.ack,pacrcv.flags.syn);
 		
@@ -221,22 +214,35 @@ void *mylisten(void *arg){
 		i = 0;
 		printf("contenuto della lista delle connessioni stabilite: \n");
 		for(i=0;i<BACKLOG;i++){
-			printf("porta: %d\nIP: %d \n\n",accepted[i].sin_port, accepted[i].sin_addr.s_addr);
+			printf("porta: %d\nIP: %d \n ",accepted[i].sin_port, accepted[i].sin_addr.s_addr);
 			
 		
 		}
 		i = 0;
-		printf("contenuto della lista delle connessioni in attesa di syn ack: \n");		
+		printf("\n\ncontenuto della lista delle connessioni in attesa di syn ack: \n");		
 		for(i=0;i<N;i++){
-			printf("porta: %d\nIP: %d \n\n",syn_rcvd[i].sin_port, syn_rcvd[i].sin_addr.s_addr);
+			printf("porta: %d\nIP: %d\n ",syn_rcvd[i].sin_port, syn_rcvd[i].sin_addr.s_addr);
 			
 		
-		}		
+		}
+		printf("\n\ncontenuto delle posizioni dell arrey delle accettate: \n");		
+		for(i=0;i<N;i++){
+			printf("%d ",ausiliarAccepted[i]);
+			
+		
+		}	
+		printf("\n\ncontenuto delle posizioni dell arrey delle syn_rcvd: \n");		
+		for(i=0;i<N;i++){
+			printf("%d ",ausiliarSyn_rcvd[i]);
+			
+		
+		}
+		printf("\n\n");
 	}
 
 }
 
-//*******************************************errore in bind argomenti*******************************
+
 
 int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
 	
@@ -251,8 +257,11 @@ int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
 	buf[0].sem_flg = 0;
 	semop(semID, buf, 1);
 	printf("\n\n********************preso il token del semaforo nell accept***************\n\n");
-	while(ausiliarAccepted[i] == false)
+	while(ausiliarAccepted[i] == false){
+		printf("in while per trovare la posizione\n\n");
 		i++;
+	}
+	printf("l aposizione del vero sta nella posizione %d\n\n\n",i);
 	printf("\n\n********************trovato la connessione in posizione: %d***************\n\n",i);
 	addr->sin_family = accepted[i].sin_family;
 	addr->sin_port = accepted[i].sin_port;
@@ -351,36 +360,42 @@ int main(int argc, char **argv){
 		perror("errore in mylisten");
 		exit(1);
 	}
-	printf("sgfdhjklò\n");
-	
-	
-	connsd = myaccept(sockfd,&client,&clientlen);
-	if ( (pid = fork()) == 0) {
-	
-		printf("\n\n*******************nel processo figlio*************\n\n");
-		printf("il cliente da servire ha l IP: %d\nPORTA: %d\n",client.sin_addr.s_addr,client.sin_port);
-		close(sockfd);
-		// manda un pacchetto per vedere se sei connesso 
-		memset((void *)&pacchetto, 0, sizeof(packet));
 
-		pacchetto.seqnumb=1242;
-		pacchetto.acknumb=21513;
-		pacchetto.flags.headlen=10;
-		pacchetto.flags.ack=0;
-		pacchetto.flags.rst=0;
-		pacchetto.flags.syn=1;
-		pacchetto.flags.fin=0;
- 		for(i=0;i<strlen("HELLO WORLD\n")+1;i++){
-			pacchetto.data[i]=strstr[i];
-		} 
-		pacchetto.data[i]='\0';
-		if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, len ) < 0) {
-			perror("errore in sendto34254");
-			exit(1); // attemzione
-		}			
+	
+	while(1){
+		connsd = myaccept(sockfd,&client,&clientlen);
+	
+		if ( (pid = fork()) == 0) {
+		
+			printf("\n\n*******************nel processo figlio*************\n\n");
+			printf("il cliente da servire ha l IP: %d\nPORTA: %d\n",client.sin_addr.s_addr,client.sin_port);
+			close(sockfd);
+			// manda un pacchetto per vedere se sei connesso 
+			memset((void *)&pacchetto, 0, sizeof(packet));
+
+			pacchetto.seqnumb=1242;
+			pacchetto.acknumb=21513;
+			pacchetto.flags.headlen=10;
+			pacchetto.flags.ack=0;
+			pacchetto.flags.rst=0;
+			pacchetto.flags.syn=1;
+			pacchetto.flags.fin=0;
+			for(i=0;i<strlen("HELLO WORLD\n")+1;i++){
+				pacchetto.data[i]=strstr[i];
+			} 
+			pacchetto.data[i]='\0';
+			if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, len ) < 0) {
+				perror("errore in sendto34254");
+				exit(1); // attemzione
+			}	
+			exit(1);
+		}
+		
+		
+		close(connsd); 
+		
+		
 	}
-	//close(connsd); 
-	 
 	
 	pthread_join(tid, &value);
 	exit_process_1:
