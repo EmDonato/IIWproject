@@ -48,7 +48,7 @@ void *makeconnection(void *arg){
 	memset((void *)&pac,0,sizeof(packet));
 	// inizializzazione del pacchetto
 	
-	pac.seqnumb=r;
+	pac.seqnumb=r;     // numero usato inizialmente e da riprendere del seqnumb
 	pac.flags.syn=1;
 	if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)arg, len ) < 0) {
 		perror("errore in sendto 1");
@@ -69,7 +69,7 @@ void *makeconnection(void *arg){
 			pac.seqnumb = r;
 			pac.flags.ack = 1;
 			pac.flags.syn=0;
-			pac.acknumb = pacrcv.seqnumb + 1;
+			pac.acknumb = pacrcv.seqnumb + 1; //******qua si trova il acknumb**********
 			if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)arg , len) < 0) {
 				perror("errore in sendto 2");
 				exit(1);
@@ -222,7 +222,7 @@ int main(int argc, char *argv[ ]) {
 
 	for (;;){
 
-
+		//***********prima di creare il pacchetto devi pulirlo memset del pachetto e metti tutto a zero********************
 		//memset(cmd_send , 0 , sizeof(cmd_send));
 		memset(cmd , 0 , sizeof(cmd));
 		memset(filename , 0 , sizeof (filename));
@@ -239,21 +239,25 @@ int main(int argc, char *argv[ ]) {
 		}
 
 		fflushout(stdio);
+		//**************per il seqnumb e il seqack ripendi i numeri mandati in precedenza durante l hand shake****************
 		packet.flags.seqnumb = 0;
 
 		switch( cmd ){
 
 			case "ls":
 			memcpy((void *)packet.data , (void *)&cmd , sizeof(cmd));
-			packet.seqnumb +=1 ;
+			packet.seqnumb +=1 ; // ********** questo non va fatto,neanche il comando successivo ***********************
 			packet.flags.ack = 0;
 			if(sendto(sockfd , ( const void *)&packet, sizeof(packet), 0 , (struct sockaddr *)&addr , sizeof(addr)) < 0){
 				perror("Errore in invio.");
 				exit(1);
 
 			}
-
+			//***************************** attendi l ack: una volta arrivato l ack devi controllarlo, cambiare il valore dell acknumb e seqnumb, crea anche delle variabili globali per questi due numeri correnti************
+			//***************************8* gestisci il time out, una volta scaduto rinzia il pacchetto,se non sai farlo lo faccio io, devi usare i segnali  *******************
 			case "get":
+			//*********************** stessa cosa per tutti queesti casi**********************
+			
 			packet.seqnumb +=1 ;
 			packet.flags.ack = 0;
 			if(sendto(sockfd , ( const void *)&packet, sizeof(packet), 0 , (struct sockaddr *)&addr , sizeof(addr)) < 0){
