@@ -111,7 +111,7 @@ int main(int argc, char **argv){
 
 		}
 
-		if ( pacrcv.flags.ack== 1 && pacrcv.seqnumb==1 ){
+		if ( pacrcv.flags.ack== 1 && pacrcv.seqnumb==1 ){  //***************stai facendo controlli sbagliati devi vedere se acknumb giusto e seqnumb giusto, ack = 0,controlla ache i flag magari************
 
 			memcpy((void *)cmd_rcvd , (void *)pacrcv.data , sizeof(pacrcv.data);
 
@@ -119,7 +119,8 @@ int main(int argc, char **argv){
 			switch (cmd_rcvd){
 
 				case "get":
-
+				// ************************** devi creare tutti i pacchetti dell ack con i giusti campi e mandarlo************************* 
+				
 
 				printf("Ricevuto il comando get");
 
