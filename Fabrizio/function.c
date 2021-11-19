@@ -149,6 +149,7 @@ void *mylisten(void *arg){
 		if(pacrcv.flags.ack==0 && pacrcv.flags.syn==1){
 			//cerco     se lo trovo ora non sto facendo nulla
 			if((foundresult=found(&addr,0)) > -1){
+				srand(time(NULL));
 				printf("la foundresult e di %d\n\n",foundresult);
 				syn_rcvd[foundresult]=addr; //se non lo trovo lo aggiungo
 				ausiliarSyn_rcvd[foundresult] = true;
