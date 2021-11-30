@@ -15,6 +15,7 @@
 #include <sys/ipc.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <fcntl.h>
 
 
 // ******************************************************manda un  pacchetto per debug**********************************
@@ -35,6 +36,9 @@ int semID;
 int main(int argc, char **argv){
 	
 	int i;
+	int descriptor;
+	
+	char *token;
 	pid_t pid;
 	pthread_t tid;
 	void *value;
@@ -42,7 +46,7 @@ int main(int argc, char **argv){
 	int n ,len=sizeof(struct sockaddr_in);
 	socklen_t clientlen;
 	key_t keysem = 32145;
-	char cmd_rcvd[10]   // vettore per memorizzare comando ricevuto che prendo dal campo data
+	char cmd_rcvd[10] ;  // vettore per memorizzare comando ricevuto che prendo dal campo data
 	int lenLissen = sizeof(struct sockaddr_in);
 	sigset_t set;
 	packet pacchetto , pacrcv;
@@ -95,15 +99,19 @@ int main(int argc, char **argv){
 		exit(1);
 	}
 
-	memset((void*)pacrcv , 0, sizeof(pacchetto));
+	memset((void *)&pacrcv , 0, sizeof(pacchetto));
 	memset(cmd_rcvd , 0 , sizeof(cmd_rcvd));
 
-
+	const char delim[2] = "_";
 	
+	packet p ;
+	// fare memset di pacchetto p
+	memset((void *)&p , 0 , sizeof(p));
+
 	while(1){
 		connsd = myaccept(sockfd,&client,&clientlen);
 	
-		n = recvfrom(sockfd ,(void *)&pacrcv , sizeof(packet) , (struct sockaddr *)&sockaddr_in , len)<0;
+		n = recvfrom(sockfd ,(void *)&pacrcv , sizeof(packet) ,0, (struct sockaddr *)&addr , &len);
 
 		if ( n < 0){
 			perror("Errore in ricezione del pacchetto.");
@@ -111,33 +119,77 @@ int main(int argc, char **argv){
 
 		}
 
-		if ( pacrcv.flags.ack== 1 && pacrcv.seqnumb==1 ){  //***************stai facendo controlli sbagliati devi vedere se acknumb giusto e seqnumb giusto, ack = 0,controlla ache i flag magari************
+		if ( pacrcv.flags.ack == 0 && pacrcv.flags.syn && pacrcv.flags.fin == 0 &&  pacrcv.acknumb == pacchetto.seqnumb && pacrcv.seqnumb == pacchetto.acknumb){ //***************stai facendo controlli sbagliati devi vedere se acknumb giusto e seqnumb giusto, ack = 0,controlla ache i flag magari************
 
-			memcpy((void *)cmd_rcvd , (void *)pacrcv.data , sizeof(pacrcv.data);
+			//memcpy((void *)cmd_rcvd , (void *)pacrcv.data , sizeof(pacrcv.data);
 
+			token = strtok(pacrcv.data , delim);
 
-			switch (cmd_rcvd){
+			const char newdelim[2] = '\0';
 
-				case "get":
-				// ************************** devi creare tutti i pacchetti dell ack con i giusti campi e mandarlo************************* 
-				
+			while ( token != NULL){
+				token = strtok( NULL , newdelim);
 
-				printf("Ricevuto il comando get");
-
-				case "ls":
-
-				printf("Ricevuto il comando ls");
-
-				case "put";
-
-				printf("Ricevuto il comando put");
-
-				case "delete";
-
-				printf("Ricevuto il comando put");
 			}
-			
+
+			memset((void *)&p , 0 , sizeof(p));
+			p.flags.ack = 1;
+			p.flags.fin = 0;
+			p.flags.syn = 0;
+
+			p.acknumb = pacrcv.seqnumb + sizeof(pacrcv.data);
+			p.seqnumb = pacrcv.acknumb;
+
+			// fare memset di pacchetto p
+			// pacchetto.flags.ack = 1 
+			// altri flags restano a 0 
+			// acknumb = pacrcv.seqnumb + sizeof(tutta la stringa tokenizzata)
+			// seqnumb = pacrcv.acknumb 
+			if ( strcmp(&token[0] , "get")){
+
+				if ( sendto(sockfd , (void *)&p , sizeof(packet),0, (struct sockaddr *)&addr , len )< 0 )
+					 {
+						perror("Errore in invio");
+						exit(1);
+
+						
+				
+					
+				}
+					printf("Ricevuto il comando get");
+
+			}
+				
+			if ( strcmp(&token[0] , "ls")){
+
+				if (sendto(sockfd , (void *)&p , sizeof(packet) , 0 , (struct sockaddr *)&addr , len)<0){
+					perror("Errore in invio ");
+				}
+				printf("Ricevuto il comando ls ");
+			}
+				
+			if ( strcmp( &token[0], "put")){
+
+				if (sendto(sockfd , (void *)&p , sizeof(packet), 0 , (struct sockaddr*)&addr , len)< 0){
+					perror("Errore in invio");
+
+				}
+				printf("Ricevuto comando put");
+
+				descriptor = creat(&token[1], 0666 );
+			}
+
+			if ( strcmp( &token[0] , "delete")){
+				if ( sendto(sockfd , (void *)&p , sizeof(packet), 0 , (struct sockaddr *)&addr , len)<0){
+					perror("Errore in invio");
+
+				}
+				printf("Ricevuto comando delete");
+
+			}
+
 		}
+
 		
 		close(connsd); 
 
@@ -151,4 +203,4 @@ int main(int argc, char **argv){
 	exit_process_4:
 		exit(1);
 }
-}
+
