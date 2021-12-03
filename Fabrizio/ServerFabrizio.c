@@ -18,6 +18,7 @@
 #include <fcntl.h>
 
 
+
 // ******************************************************manda un  pacchetto per debug**********************************
 
 key_t semkey = 12345;
@@ -36,9 +37,12 @@ int semID;
 int main(int argc, char **argv){
 	
 	int i;
-	int descriptor;
-	
-	char *token;
+	FILE *fptr;
+	char command_rcvd[50];
+
+	int file_descriptor;
+
+
 	pid_t pid;
 	pthread_t tid;
 	void *value;
@@ -46,7 +50,7 @@ int main(int argc, char **argv){
 	int n ,len=sizeof(struct sockaddr_in);
 	socklen_t clientlen;
 	key_t keysem = 32145;
-	char cmd_rcvd[10] ;  // vettore per memorizzare comando ricevuto che prendo dal campo data
+	
 	int lenLissen = sizeof(struct sockaddr_in);
 	sigset_t set;
 	packet pacchetto , pacrcv;
@@ -100,9 +104,9 @@ int main(int argc, char **argv){
 	}
 
 	memset((void *)&pacrcv , 0, sizeof(pacchetto));
-	memset(cmd_rcvd , 0 , sizeof(cmd_rcvd));
+	
 
-	const char delim[2] = "_";
+	
 	
 	packet p ;
 	// fare memset di pacchetto p
@@ -119,25 +123,25 @@ int main(int argc, char **argv){
 
 		}
 
-		if ( pacrcv.flags.ack == 0 && pacrcv.flags.syn && pacrcv.flags.fin == 0 &&  pacrcv.acknumb == pacchetto.seqnumb && pacrcv.seqnumb == pacchetto.acknumb){ //***************stai facendo controlli sbagliati devi vedere se acknumb giusto e seqnumb giusto, ack = 0,controlla ache i flag magari************
+		if ( pacrcv.flags.ack == 0 && pacrcv.flags.syn && pacrcv.flags.fin == 0 ){ //***************stai facendo controlli sbagliati devi vedere se acknumb giusto e seqnumb giusto, ack = 0,controlla ache i flag magari************
 
-			//memcpy((void *)cmd_rcvd , (void *)pacrcv.data , sizeof(pacrcv.data);
+			
 
-			token = strtok(pacrcv.data , delim);
+			strcpy(command_rcvd , pacrcv.data);
 
-			const char newdelim[2] = '\0';
+			char *cmd_name = strtok(command_rcvd , " ");
+			char *filename = strtok(command_rcvd , " ");
 
-			while ( token != NULL){
-				token = strtok( NULL , newdelim);
 
-			}
+
+
 
 			memset((void *)&p , 0 , sizeof(p));
 			p.flags.ack = 1;
 			p.flags.fin = 0;
 			p.flags.syn = 0;
 
-			p.acknumb = pacrcv.seqnumb + sizeof(pacrcv.data);
+			p.acknumb = pacrcv.seqnumb + sizeof(pacrcv.data);  // oppure usiamo p.acknumb = pacrcv.seqnumb + 1 ?
 			p.seqnumb = pacrcv.acknumb;
 
 			// fare memset di pacchetto p
@@ -145,7 +149,7 @@ int main(int argc, char **argv){
 			// altri flags restano a 0 
 			// acknumb = pacrcv.seqnumb + sizeof(tutta la stringa tokenizzata)
 			// seqnumb = pacrcv.acknumb 
-			if ( strcmp(&token[0] , "get")){
+			if ( strcmp(cmd_name , "get")){
 
 				if ( sendto(sockfd , (void *)&p , sizeof(packet),0, (struct sockaddr *)&addr , len )< 0 )
 					 {
@@ -156,34 +160,140 @@ int main(int argc, char **argv){
 				
 					
 				}
+
+				if ( access(filename, F_OK)==0){    // controllo se il file esiste passando file name ed opzione F_OK per la ricerca
+
+
+					fptr = fopen(filename , "rb");     // apre il file e ritorna il puntatore che assegnamo al descrittore 
+
+					// possibile suddivisione del file in blocchi di bytes per successivo invio
+					
+
+
+					// se il file esiste allora invio inizializzando il pacchetto 
+					if (sendto(sockfd , (void *)&p , sizeof(packet), 0 , (struct sockaddr *)&addr , len) < 0){
+						perror("Errore in invio");
+						exit(1);
+
+					}
+					// controllo la ricezione di ack e seqnumb di p , altrimenti devo rinviare
+					int n = recvfrom(sockfd , (void *)&pacrcv , sizeof(packet), 0 , (struct sockaddr *)&addr , &len );
+					if ( n < 0){
+						perror("Errore in ricezione.");
+						exit(1);
+
+					}
+					if (p.acknumb == pacrcv.seqnumb + 1 && p.seqnumb == pacrcv.acknumb){
+
+						printf("Pacchetto inviato correttamente");
+
+					}
+					// altrimenti bisogna rinviare il file
+
+
+					fclose(fptr); //chiudo il file su cui abbiamo lavorato;
+
+
+				}
+
+				else {
+
+					char *stringerror = "File non esiste\0";
+					strcpy(p.data , stringerror)    // copio la stringa di errore nel campo dati del pacchetto
+
+					sendto(sockfd , (void *)&p , sizeof(packet), 0 , (struct sockaddr *)&addr , len); // invio il pacchetto al client con errore di ricerca del file
+
+
+
+				}
+				// se non esiste il file errore nel campo data del pacchetto da rimandare
+
 					printf("Ricevuto il comando get");
 
 			}
 				
-			if ( strcmp(&token[0] , "ls")){
+			if ( strcmp(cmd_name , "ls")){
+
+				char file_entry[200];
+				memset(file_entry , 0 , sizeof(file_entry));
+
+				fptr = fopen("file.txt", "wb");     // creo un file con permessi di scrittura
+
+				if (ls(fptr) == -1){
+					perror("ls");
+					exit(-1);
+
+				}
+				fclose(fptr);
+
+				fptr = fopen("file.txt " , "rb");
+
+				int filesize = fread(file_entry , 1 , 200 , fptr);
+
+				memcpy((void *)&p.data , &fptr ,filesize);
+
+
 
 				if (sendto(sockfd , (void *)&p , sizeof(packet) , 0 , (struct sockaddr *)&addr , len)<0){
 					perror("Errore in invio ");
 				}
+
+				rcvfrom(sockfd , (void *)&pacrcv , sizeof(packet , 0 , (struct sockaddr *)&addr , len));
+
+				
+				if (p.acknumb == pacrcv.seqnumb + 1 && p.seqnumb == pacrcv.acknumb){
+					printf("Pacchetto inviato correttamente");
+
+				}
+
 				printf("Ricevuto il comando ls ");
 			}
 				
-			if ( strcmp( &token[0], "put")){
+			if ( strcmp( cmd_name, "put")){
 
 				if (sendto(sockfd , (void *)&p , sizeof(packet), 0 , (struct sockaddr*)&addr , len)< 0){
 					perror("Errore in invio");
 
 				}
-				printf("Ricevuto comando put");
 
-				descriptor = creat(&token[1], 0666 );
-			}
+				rcvfrom(sockfd , (void *)&pacrcv , sizeof(packet), 0 , (struct sockaddr*)&addr , len);
+				if (p.acknumb == pacrcv.seqnumb + 1 && p.seqnumb == pacrcv.acknumb){
+					printf("Ricevuto comando put");
+				
+				// controllo prima se il file esiste altrimenti lo creo 
+					file_descriptor = creat(&token[1], 0666 );
+				}
+				else{
+					// riprovare
+				}
 
-			if ( strcmp( &token[0] , "delete")){
+			if ( strcmp( cmd_name , "delete")){
 				if ( sendto(sockfd , (void *)&p , sizeof(packet), 0 , (struct sockaddr *)&addr , len)<0){
 					perror("Errore in invio");
 
 				}
+
+				rcvfrom(sockfd, (void *)&pacrcv , sizeof(packet), 0 , (struct sockaddr *)&addr , len);
+				if(p.acknumb == pacrcv.seqnumb + 1 && p.seqnumb == pacrcv.acknumb){
+
+					if (access(filename  , F_OK ) == -1){ 			// controllo se il file esiste 
+						
+
+					} 
+					else {
+						if (access(filename , R_OK )==-1){    // controllo se il file ha i permessi giusti
+
+						}
+						else{
+							printf("Nome file è %s \n", filename);
+							remove(filename);
+							
+						}
+					}
+				}
+				// funzione per cercare file , se presente eliminarlo e poi cancellare anche il nome dal .txt creato in ls
+				// inviare poi il pacchetto con errore oppure cancellato
+				
 				printf("Ricevuto comando delete");
 
 			}

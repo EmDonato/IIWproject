@@ -165,13 +165,18 @@ void *myconnect(void *arg){
 
 int main(int argc, char *argv[ ]) {
 
-	char *cmd_send;    //variabili per l'inserimento dei comandi e del nome del file
-	//char cmd[10];
-	//char filename[10];
+	   //variabili per l'inserimento dei comandi e del nome del file
+	
+
 	int32_t acknumber_atteso;
 	int32_t seqnumber_atteso;
 	char *token;
-	char *comando_completo;
+	char *command_send;
+	char *delim = " ";
+	char command_name[20];
+	char file_name[50];
+	ssize_t numRead = 0;
+	ssize_t length = 0;
 
 
 
@@ -181,6 +186,8 @@ int main(int argc, char *argv[ ]) {
 	pthread_t tid;
 	struct    sockaddr_in   servaddr;
 	packet packet , p , pacrcv ; 
+
+
 
 	memset((void *)&packet,0,sizeof(packet));
 
@@ -226,37 +233,37 @@ int main(int argc, char *argv[ ]) {
 	}
 	printf("il pacchetto ricevuto:\nSEQNUMB: %d\nSEQACK: %d\nACK: %d\nSYN: %d\nFIN: %d\n\nDATA: %s\n",packet.seqnumb,packet.acknumb,packet.flags.ack,packet.flags.syn,packet.flags.fin,packet.data);
 
-	const char delim[2] = " ";
+	
 	for (;;){
 
 		//***********prima di creare il pacchetto devi pulirlo memset del pachetto e metti tutto a zero********************
 		memset((void*)&packet, 0 , sizeof(packet));
 		//memset(cmd_send , 0 , sizeof(cmd_send));
-		memset(cmd_send , 0 , sizeof(cmd_send));
-		//memset(filename , 0 , sizeof (filename));
+	
 
 
 		printf("Inserisci comando: ");
-		scanf("[^\n]%c", cmd_send);
+		scanf("%m[^\n]", command_send);
 
-		memcpy((void *)packet.data , (void*)&cmd_send , sizeof(cmd_send) );
-		if (sendto(sockfd , (const void *)&packet , sizeof(packet), 0 , (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0 ){
-			perror("Errore nella fase di invio.");
-			exit(1);
+		//memcpy((void *)packet.data , (void*)&cmd_send , sizeof(cmd_send) );
+		//if (sendto(sockfd , (const void *)&packet , sizeof(packet), 0 , (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0 ){
+		//	perror("Errore nella fase di invio.");
+		//	exit(1);
 
-		}
+		//}
 
-		fflush(stdin);
-		//**************per il seqnumb e il seqack ripendi i numeri mandati in precedenza durante l hand shake****************
-		token = strtok(cmd_send , delim);
-		const char newdelim[2] = "\n";
-		while ( token !=NULL){
+		//fflush(stdin);
+	
+		char *cmd = strtok(command_send , delim);
+		char *flnm= strtok(NULL , delim);
 
-			token = strtok(NULL , newdelim);
+		//per evitare la token si poteva anche usare sscanf()
+		strcpy(command_name , cmd);       // command name = get (esempio)
+		strcpy(file_name , flnm);		  // filename = image (esempio)
 
-		}
+		strcat(command_name , " ");       // concatenzaione di nome comando più uno spazio
+		strcat(command_name , file_name); // concatenazione nomecomando filename da mettere nella sezione data del pacchetto da inviare
 
-		
 
 		memset((void *)&p , 0 , sizeof (p));
 
@@ -267,87 +274,129 @@ int main(int argc, char *argv[ ]) {
 		p.flags.fin = 0;
 		p.flags.ack = 0;
 
-		// concateno il comando con un carattere '_' 
-
-		//strcat(&token[0] , '_');
-
-		//strcat(&token[0], &token[1]);
 
 
 
-		if ( strcmp(&token[0] , "ls")){
+		if ( strcmp(cmd , "ls")){
  
-			strcat(&token[0] , "_");   // al token corrispondente al comando concateno il carattere _
-			strcat(&token[0] , &token[1]); // la stringa comolessiva diventa comando_nomefile
-			strcpy(comando_completo , &token[0]); // comando completo = "comando_nomefile"
+			
 			// l'inserimento permette di usare la strtok lato server nel campo data del pacchetto per tokenizzarlo
 
-			memcpy ( (void *)&p.data , (void *)comando_completo  , sizeof(comando_completo));
+			strcpy(p.data , command_name);  // copio comando completo nel pacchetto ed invio
 		    if ( sendto(sockfd , ( const void *)&p , sizeof( p ) , 0 , (struct sockaddr *)&servaddr , sizeof(servaddr) ) < 0){
 		    		perror("Errore in invio");
 		    		exit(1);
 		    }
+		    recvfrom(sockfd,(void *)&pacrcv, sizeof(packet), 0 ,(struct sockaddr *)&servaddr,&len );
 
 		    if (pacrcv.flags.ack == 1 && pacrcv.acknumb == seqnumber_atteso){
 
 		    		printf("Ricezione corretta");
+
+		    		char filename[200];
+		    		memset(filename , 0 , sizeof(filename));
+
+		    		length = sizeof(servaddr);
+		    		if(numRead = recvfrom(sockfd , filename , sizeof(filename) , 0 , (struct sockaddr *)&servaddr , &len ) < 0){
+
+		    			printf("Errore in ricezione ");
+
+
+		    		}
+		    		if (filename[0] != '\0'){
+		    			printf("Numero di byte ricevuti = %ld\n", numRead);
+		    			printf("\nQuesta è la lista dei file e delle directories --> \n%s \n", filename);
+
+		    		}
+
+
+
+
 
 		    }
 
 
 
 		}
-		if (strcmp(&token[0] , "get")){
-			strcat(&token[0], "_");
-			strcat(&token[0] , &token[1]);
-			strcpy(comando_completo , &token[0]);
-			memcpy( (void *)&p.data , (void *)comando_completo , sizeof( comando_completo));
+		else if (strcmp(cmd , "get")){
+
+			strcpy(p.data , command_name);
+
 			if ( sendto(sockfd , ( const void *)&p , sizeof( p ) , 0 , (struct sockaddr *)&servaddr , sizeof(servaddr) ) < 0){
 		    		perror("Errore in invio");
 		    		exit(1);
 		    }
+
+		    recvfrom( sockfd , (const void *)&pacrcv , sizeof(pacrcv), 0 , (struct sockaddr *)&servaddr , &len);
+
+
+		    if (pacrcv.flags.ack == 1 && pacrcv.acknumb == seqnumber_atteso){
+
+		    		printf("Ricezione corretta");
+		    		// operazioni per ottenere file
+
+		    
+			}
+		}
+		else if (strcmp(&token[0] , "put")){
+			
+			
+			strcpy(p.data , command_name);
+
+			if ( sendto(sockfd , ( const void *)&p , sizeof( p ) , 0 , (struct sockaddr *)&servaddr , sizeof(servaddr) ) < 0){
+		    		perror("Errore in invio");
+		    		exit(1);
+		    }
+
+		    rcvfrom(sockfd , ( const void *)&pacrcv , sizeof(pacrcv), 0 , (struct sockaddr *)&servaddr , sizeof(servaddr));
 
 		    if (pacrcv.flags.ack == 1 && pacrcv.acknumb == seqnumber_atteso){
 
 		    		printf("Ricezione corretta");
 
 		    
+			}
 		}
-	}
-		if (strcmp(&token[0] , "put")){
-			strcat(&token[0], "_");
-			strcat(&token[0] , &token[1]);
-			strcpy(comando_completo , &token[0]);
-			memcpy( (void *)&p.data , (void *)comando_completo , sizeof( comando_completo));
+	 	else if (strcmp(cmd, "delete")){
+		
+			strcpy(p.data , command_name);
+
 			if ( sendto(sockfd , ( const void *)&p , sizeof( p ) , 0 , (struct sockaddr *)&servaddr , sizeof(servaddr) ) < 0){
 		    		perror("Errore in invio");
 		    		exit(1);
 		    }
 
-		    if (pacrcv.flags.ack == 1 && pacrcv.acknumb == seqnumber_atteso){
-
-		    		printf("Ricezione corretta");
-
-		    
-		}
-	}
-	if (strcmp(&token[0] , "delete")){
-			strcat(&token[0], "_");
-			strcat(&token[0] , &token[1]);
-			strcpy(comando_completo , &token[0]);
-			memcpy( (void *)&p.data , (void *)comando_completo , sizeof( comando_completo));
-			if ( sendto(sockfd , ( const void *)&p , sizeof( p ) , 0 , (struct sockaddr *)&servaddr , sizeof(servaddr) ) < 0){
-		    		perror("Errore in invio");
-		    		exit(1);
-		    }
+		    rcvfrom(sockfd , ( const void *)&pacrcv , sizeof(pacrcv), 0 , (struct sockaddr *)&servaddr , sizeof(servaddr));
 
 		    if (pacrcv.flags.ack == 1 && pacrcv.acknumb == seqnumber_atteso){
 
-		    		printf("Ricezione corretta");
+		    		
+		    		length = sizeof(servaddr);
+		    		pacrcv.acknumb = 0;
+
+		    		if ((numRead = recvfrom(sockfd , (void *)&pacrcv.acknumb , sizeof(pacrcv.acknumb), 0 , (struct sockaddr *)&servaddr , &length))){
+
+		    			if (pacrcv.acknumb > 0)
+		    				printf ("File eliminato\n");
+		    			else if (pacrcv.acknumb < 0)
+		    				printf("Nome non valido \n");
+		    			else
+		    				printf("Il file non ha i permessi adeguati");
+
+
+
+		    		
+
+		    		}
+
 
 		    
+			}
 		}
-	}
+		else{
+			printf("comando non valido");
+			
+		}
 
 
 
