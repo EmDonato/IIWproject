@@ -149,6 +149,7 @@ void *mylisten(void *arg){
 		if(pacrcv.flags.ack==0 && pacrcv.flags.syn==1){
 			//cerco     se lo trovo ora non sto facendo nulla
 			if((foundresult=found(&addr,0)) > -1){
+				srand(time(NULL));
 				printf("la foundresult e di %d\n\n",foundresult);
 				syn_rcvd[foundresult]=addr; //se non lo trovo lo aggiungo
 				ausiliarSyn_rcvd[foundresult] = true;
@@ -287,22 +288,56 @@ void shutout(int sig){
 	
 }
 
+int reorder(packetsend array[], int size){
+	
+  //it's a bubblesort
+  
+  packetsend temp;
+  // loop to access each array element
+  for (int step = 0; step < size - 1; ++step) {
+      
+    // loop to compare array elements
+		for (int i = 0; i < size - step - 1; ++i) {
+		  
+		  // compare two adjacent elements
+		  // change > to < to sort in descending order
+		  if (array[i].seqnumb > array[i + 1].seqnumb) {
+			
+			// swapping occurs if elements
+			// are not in the intended order
+			memcpy((void *)&temp,(void *)&array[i],sizeof(packetsend));
+			memcpy((void *)&array[i],(void *)&array[i + 1],sizeof(packetsend));
+			memcpy((void *)&array[i + 1],(void *)&temp,sizeof(packetsend));
+
+			}
+		}
+    }
+	return 0;
+}
+
+
+
+void printArray(packetsend array[], int size) {
+  for (int i = 0; i < size; ++i) {
+    printf("in posizione %d\n seqnumb = %d\n acknumb = %d\n overwritable = %d\n position = %d\n", i,  array[i].seqnumb, array[i].acknumb, array[i].overwritable,array[i].position);
+	printf("\n\n");
+  }
+  printf("\n");
+}
 
 int ls(FILE *f){
-
-
 	struct dirent **dirent ;
 	int n = 0;
-	if ((n = scandir(".", &dirent , NULL , alphasort)) < 0){
-		perror("Scanerror");
+	if (( n =scandir(".", &dirent , NULL , alphasort))< 0){
+		perror("Scan error.");
 		return -1;
 
-	}
-	while( n--){
-		fprintf(f , "%s\n", dirent[n]-> d_name );
-		free(dirent[n]);
 
+	}
+	while(n--){
+		fprintf(f, "%s\n",dirent[n]->d_name);
+		free(dirent[n]);
 	}
 	free(dirent);
-
+	
 }
