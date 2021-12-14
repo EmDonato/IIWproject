@@ -1,7 +1,7 @@
-#define MAXLINE     1024
+
 #define SERV_PORT 5193
 #define BACKLOG 10
-#define MAXLINE 1024  // lo diminuirei
+#define MAXLINE 128 
 #define N 10
 #define NEWSERV_PORT 519
 
@@ -17,7 +17,7 @@
 			uint8_t syn:1;
 			uint8_t fin:1;
 			}flags;
-	char data[MAXLINE];
+	char data[128];
 }packet;
 
 typedef struct packetsend{ // struttura dati per sapere i pacchetti mandati
