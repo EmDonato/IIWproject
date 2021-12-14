@@ -199,7 +199,7 @@ int main(int argc, char **argv){
 					else {
 
 						char *stringerror = "File non esiste\0";
-						strcpy(p.data , stringerror)    // copio la stringa di errore nel campo dati del pacchetto
+						strcpy(p.data , stringerror);    // copio la stringa di errore nel campo dati del pacchetto
 
 						sendto(sockfd , (void *)&p , sizeof(packet), 0 , (struct sockaddr *)&addr , len); // invio il pacchetto al client con errore di ricerca del file
 
@@ -238,7 +238,7 @@ int main(int argc, char **argv){
 						perror("Errore in invio ");
 					}
 
-					rcvfrom(sockfd , (void *)&pacrcv , sizeof(packet , 0 , (struct sockaddr *)&addr , len));
+					recvfrom(sockfd , (void *)&pacrcv , sizeof(packet , 0 , (struct sockaddr *)&addr , len));
 
 				
 					if (p.acknumb == pacrcv.seqnumb + 1 && p.seqnumb == pacrcv.acknumb){
