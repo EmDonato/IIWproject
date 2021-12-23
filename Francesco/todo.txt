@@ -1,0 +1,5 @@
+TODO:
+
+~ Aggiungere l'ack ai pacchetti inviati dal thread send
+~ Gestire il problema discusso in chiamata (pacchetto perso nella prima iterazione)
+~ Testare bene i vari casi con ritardo e fix timeout.
