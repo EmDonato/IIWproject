@@ -4,26 +4,41 @@
 #define NEWSERV_PORT 519
 
 
-typedef struct packet{
-	int32_t seqnumb;
-	int32_t acknumb;
-	struct flags{
-			uint8_t headlen:4;
-			uint8_t ack:1;
-			uint8_t rst:1;
-			uint8_t syn:1;
-			uint8_t fin:1;
-			}flags;
-	char data[MAXSIZE];
+typedef struct packet
+{
+  int32_t seqnumb;
+  int32_t acknumb;
+  bool last;
+  int data_size;
+  struct flags{
+      uint8_t headlen:4;
+      uint8_t ack:1;
+      uint8_t rst:1;
+      uint8_t syn:1;
+      uint8_t fin:1;
+      }flags;
+  char data[MAXSIZE];
 }packet;
 
-typedef struct packetsend{ // struttura dati per sapere i pacchetti mandati
-	int32_t seqnumb;
-	int32_t acknumb;
-	bool overwritable;
-	int position;
+typedef struct packetsend{
+  int32_t seqnumb;
+  int32_t acknumb;
+  bool overwritable;
+  int position;
+  bool last;
+  int data_size;
 }packetsend;
+
 int ls(FILE *f);
+
+
+
+typedef struct gate{
+	
+	int sockID;
+	int address;
+	
+}gate;
 
 void makePacket(packet *,int32_t ,int32_t , int );
 
@@ -53,3 +68,7 @@ void createFirstPac(packet *,int32_t,int32_t,char *);
 
 
 int sendRequest(int ,struct sockaddr_in *,packet *);
+
+int sendFile(int , int32_t , int32_t , int , struct sockaddr_in );
+
+int rcv(int , struct sockaddr_in * ,int ,int32_t ,int32_t );
