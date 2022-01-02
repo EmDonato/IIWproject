@@ -25,6 +25,8 @@ extern int sockfd, connsd;
 extern int IDsem;
 extern struct sockaddr_in accepted[BACKLOG];
 extern struct sockaddr_in syn_rcvd[N];
+extern struct gate gateAccepted[BACKLOG];
+extern struct gate gateSyn_rcvd[N];
 extern pthread_t tidglb;
 extern bool ausiliarAccepted[BACKLOG];
 extern bool ausiliarSyn_rcvd[N];
@@ -100,11 +102,20 @@ int foundAndDetroy(struct sockaddr_in *addr,int x){
 		if(addr->sin_port==syn_rcvd[i].sin_port && addr->sin_addr.s_addr==syn_rcvd[i].sin_addr.s_addr){   //se lo trovo lo cancello e lo metto nella connected 
 			memset((void *)&syn_rcvd[i], 0, sizeof(struct sockaddr_in));
 			ausiliarSyn_rcvd[i] = false;
+			
 			// lo metto nella connected
 			accepted[x].sin_family = AF_INET;
 			accepted[x].sin_port = addr->sin_port;
 			accepted[x].sin_addr.s_addr = addr->sin_addr.s_addr;
 			ausiliarAccepted[x] = true;
+			gateAccepted[x].sockID=gateSyn_rcvd[i].sockID;
+			gateAccepted[x].address=gateSyn_rcvd[i].address;
+			memset((void *)&gateSyn_rcvd[i],0,sizeof(struct gate));			
+			
+			
+			
+			
+			
 			return 1;
 		}
 	}
@@ -125,17 +136,23 @@ void *mylisten(void *arg){
 	
 	memset((void *)&accepted, 0, BACKLOG*sizeof(struct sockaddr_in));
 	memset((void *)&syn_rcvd, 0, N*sizeof(struct sockaddr_in));
+	memset((void *)&gateAccepted, 0, BACKLOG*sizeof(struct gate));
+	memset((void *)&gateSyn_rcvd, 0, N*sizeof(struct gate));	
+	char nameint[6];
+	
 	
 	int i=0,len=sizeof(struct sockaddr_in);
 	int foundresult;
-	struct sockaddr_in addr; //struttura dove verra consegnato l informazione sul mittente
+	struct sockaddr_in addr,newAddr; //struttura dove verra consegnato l informazione sul mittente
 	packet pacrcv,pacchetto;	 //struttura dove verra consegnato il pacchetto, pacchetto e quello che mandi
 	srand(time(NULL));
 	memset((void *)&pacrcv, 0, sizeof(packet));
 	memset((void *)&pacchetto, 0, sizeof(packet));
 	//creo il semaforo per la connect
  
- 
+	// vriabili che conterranno Id socket e numero di porta 
+	int ids,portaus, lenname = sizeof(struct sockaddr);
+	
  
 	while(1){
 		//ricevo un pacchetto
@@ -157,6 +174,23 @@ void *mylisten(void *arg){
 				srand(time(NULL));
 				printf("la foundresult e di %d\n\n",foundresult);
 				syn_rcvd[foundresult]=addr; //se non lo trovo lo aggiungo
+				//criamo il socket 
+				memset((void *)&newAddr, 0, sizeof(struct sockaddr_in));
+				if ((ids = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
+					perror("errore in socket");
+					exit(1); 
+				}
+				newAddr.sin_family = AF_INET;
+				newAddr.sin_addr.s_addr = htonl(INADDR_ANY); /* il server accetta pacchetti su una qualunque delle sue interfacce di rete */
+				newAddr.sin_port = htons(0); /* numero di porta del server */				
+				if (bind(ids, (struct sockaddr *)&newAddr, sizeof(struct sockaddr_in)) < 0) {
+					perror("errore in bind");
+					exit(1);
+				}
+				gateSyn_rcvd[foundresult].sockID =ids;
+				getsockname(ids, (struct sockaddr *)&newAddr,&lenname);
+				gateSyn_rcvd[foundresult].address = newAddr.sin_port;
+				//fine
 				ausiliarSyn_rcvd[foundresult] = true;
 				pacchetto.seqnumb = r; //assegno un numero casuale come numero sequenza
 				pacchetto.acknumb = pacrcv.seqnumb + 1; //richiedo il byte successivo
@@ -165,6 +199,9 @@ void *mylisten(void *arg){
 				pacchetto.flags.rst = 0;
 				pacchetto.flags.syn = 1;
 				pacchetto.flags.fin = 0;
+				
+				sprintf(nameint,"%d",gateSyn_rcvd[foundresult].address);
+				strcpy(pacchetto.data,nameint);
 				printf("il pacchetto da mandare la prima volta:\n %d \n %d \n %d \n %d\n %s ",pacchetto.seqnumb,pacchetto.acknumb,pacchetto.flags.ack,pacchetto.flags.syn,pacchetto.data);
 
 				if (sendto(sockfd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&addr, len ) < 0) {
@@ -217,6 +254,7 @@ void *mylisten(void *arg){
 			
 		
 		}
+
 		i = 0;
 		printf("\n\ncontenuto della lista delle connessioni in attesa di syn ack: \n");		
 		for(i=0;i<N;i++){
@@ -224,6 +262,13 @@ void *mylisten(void *arg){
 			
 		
 		}
+		i = 0;
+		printf("\n\ncontenuto della lista dei sochet e degli indirizzi syn ack: \n");		
+		for(i=0;i<N;i++){
+			printf("porta: %d\n socket: %d\n ",gateSyn_rcvd[i].address, gateSyn_rcvd[i].sockID);
+			
+		
+		}		
 		printf("\n\ncontenuto delle posizioni dell arrey delle accettate: \n");		
 		for(i=0;i<N;i++){
 			printf("%d ",ausiliarAccepted[i]);
@@ -243,7 +288,7 @@ void *mylisten(void *arg){
 
 
 
-int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
+int myaccept(int sockfd, struct sockaddr_in *addr1, socklen_t *addrlen){
 	
 	struct sockaddr_in addrpers;
 	memset((void *)&addrpers, 0, sizeof(addrpers));
@@ -262,29 +307,14 @@ int myaccept(int sockfd, struct sockaddr_in *addr, socklen_t *addrlen){
 	}
 	printf("l aposizione del vero sta nella posizione %d\n\n\n",i);
 	printf("\n\n********************trovato la connessione in posizione: %d***************\n\n",i);
-	addr->sin_family = accepted[i].sin_family;
-	addr->sin_port = accepted[i].sin_port;
-	addr->sin_addr.s_addr = accepted[i].sin_addr.s_addr;
+	addr1->sin_family = accepted[i].sin_family;
+	addr1->sin_port = accepted[i].sin_port;
+	addr1->sin_addr.s_addr = accepted[i].sin_addr.s_addr;
 	*addrlen = sizeof(accepted[i]);
 	memset((void *)&accepted[i], 0, sizeof(struct sockaddr_in));
 	ausiliarAccepted[i] = false;
-	if ((IDsock = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
-		perror("errore in socket");
-		exit(1); 
-	}
-	int reu =1;
-
-
-	if (setsockopt(IDsock, SOL_SOCKET, SO_REUSEADDR, &reu, sizeof(int)) < 0)
-		 perror("setsockopt(SO_REUSEADDR) failed");
-	  /* assegna l'indirizzo al socket */
-	addrpers.sin_family = AF_INET;
-	addrpers.sin_addr.s_addr = htonl(INADDR_ANY); /* il server accetta pacchetti su una qualunque delle sue interfacce di rete */
-	addrpers.sin_port = htons(SERV_PORT); /* numero di porta del server */
-	if (bind(IDsock, (struct sockaddr *)&addrpers, sizeof(addrpers)) < 0) {
-		perror("errore in bind");
-		exit(1);
-	}
+	IDsock = gateAccepted[i].sockID;
+	memset((void *)&gateAccepted[i], 0, sizeof(struct gate));
 	return IDsock;
 	
 }
@@ -298,7 +328,7 @@ void shutout(int sig){
 	
 }
 
-int reorder(packetsend array[], int size){
+/* int reorder(packetsend array[], int size){
 	
   //it's a bubblesort
   
@@ -323,7 +353,7 @@ int reorder(packetsend array[], int size){
 		}
     }
 	return 0;
-}
+} */
 
 
 
