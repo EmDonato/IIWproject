@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-
+#include<semaphore.h>
 #include <sys/shm.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -29,7 +29,10 @@ int sockfd, connsd;
 int IDsem;
 struct sockaddr_in accepted[BACKLOG];
 struct sockaddr_in syn_rcvd[N];
+struct gate gateAccepted[BACKLOG];
+struct gate gateSyn_rcvd[N];
 pthread_t tidglb;
+int newPort = SERV_PORT + 1;
 bool ausiliarAccepted[BACKLOG] = { false };
 bool ausiliarSyn_rcvd[N] = { false };
 int semID;
@@ -97,8 +100,8 @@ int main(int argc, char **argv){
 	
 	
 	
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reu, sizeof(int)) < 0)
-		 perror("setsockopt(SO_REUSEADDR) failed");
+	// if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reu, sizeof(int)) < 0)
+		 // perror("setsockopt(SO_REUSEADDR) failed");
 	
 	  /* assegna l'indirizzo al socket */
 	if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
@@ -113,21 +116,31 @@ int main(int argc, char **argv){
 	
 	
 	while(1){
-		connsd = myaccept(sockfd,&client,&clientlen);
+		printf("*************************still alive*****************************\n\n");
+		fflush(stdout);
+		int connsd = myaccept(sockfd,&addr,&len);
 		printf("\n **************sockfd %d,connsd %d********************\n ",sockfd,connsd);
+	
 		fflush(stdout);
 		if ( (pid = fork()) == 0) {
 			close(sockfd);
+			
+			
 			printf("\n\n*******************************nel processo figlio: gestione della richiesta******************************\n\n"); 
+			printf("il numero di socket del padre %d\n\n",sockfd);
+			printf("il numero di socket e %d\n\n",connsd);
+			printf("lindirizzo del client da servire\nporta: %d\nIP: %d\n ",client.sin_port, client.sin_addr.s_addr);
 			memset((void *)&pacchetto,0,sizeof(packet));
 			while(1){
 				printf("*************************in loop**************************\n");
-
+				getsockname(connsd, (struct sockaddr *)&addr,&len);
+				printf("\n numero di sochet del figlio e numero di porta associato %d, %d*\n ",connsd,addr.sin_port);	
 				if((recvfrom(connsd,(void *)&pacchetto, sizeof(packet), 0 ,(struct sockaddr *) &client,&len )) < 0) {
 					perror("errore in recvfrom");
 					exit(1);
 				}			
-				if( pacchetto.flags.ack == 0){
+				printf("il pacchetto ricevuto dal figlio:\n %d \n %d \n %d \n %d\n %s ",pacchetto.seqnumb,pacchetto.acknumb,pacchetto.flags.ack,pacchetto.flags.syn,pacchetto.data);
+				if( pacchetto.flags.ack == 0  ){
 					printf("superato il controllo\n\n");
 					lendata = strlen(pacchetto.data);
 					sn = pacchetto.acknumb;
@@ -145,13 +158,15 @@ int main(int argc, char **argv){
 					switch(strswitch(cmd[0])) {
 						case 0:
 							printf("\n\n*********************in list*********************\n\n");
+							
 							makePacket(&pacchetto,sn,an,0);
 							if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
 								perror("errore in sendto 1");
 								exit(1);
-							}						
+							}
+							
 							fptr = fopen("a.txt", "wb");	//Create a file with write permission
-
+							
 							if (ls(fptr) == -1)		//get the list of files in present directory
 								perror("ls");
 
@@ -159,6 +174,7 @@ int main(int argc, char **argv){
 						break;
 						
 						case 1:
+						
 							printf("\n\n*********************in delete*********************\n\n");	
 								if(access(cmd[1],F_OK) == 0){
 									strcpy(last_file,cmd[1]);
@@ -227,11 +243,15 @@ int main(int argc, char **argv){
 									if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
 										perror("errore in sendto 1");
 										exit(1);
-									}						
-														
+									}
+									printf("il fil e presente\n\n");	
+									//apro il file
+	 								file_descriptor = open(cmd[1],O_RDWR,0666);
+									sendFile(file_descriptor,sn ,an ,connsd, (struct sockaddr_in)client); 				
 								}
 								else{
 									makePacket(&pacchetto,sn,an,1);
+									printf("il fil non e presente\n\n");
 									printf("il pacchetto da mandare1:\n %d \n %d \n %d \n %d\n %s ",pacchetto.seqnumb,pacchetto.acknumb,pacchetto.flags.ack,pacchetto.flags.syn,pacchetto.data);
 									if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
 										perror("errore in sendto 1");
@@ -253,10 +273,10 @@ int main(int argc, char **argv){
 				}
 			}
 				
-				
+			 	
 			
 		}
-		
+		printf("\n\n*************************PADRE DALL ALTRA PARTE*****************************\n\n");
 		
 		close(connsd); 
 		
