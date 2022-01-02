@@ -164,8 +164,7 @@ void *thread_send()
     }    
     if (pack.last == true)
     {
-      close(fd);
-      exit(0);
+      break;
     }
   }
 }
@@ -204,7 +203,7 @@ void *thread_ack()
       ack_atteso++;
     }
 
-    //Non ben testato
+
     if (ack > ack_atteso)
     {
       reorder(ctrl, W);
@@ -224,6 +223,10 @@ void *thread_ack()
       }
       aux = 0;
     }
+    if (temp -> last == true)
+    {
+      break;
+    }
   } 
 }
 
@@ -232,7 +235,7 @@ void alarm_handler( int signum)
 {
   printf("alarm\n");
   // Ordina array di packetsend. Funzione Ema.
-  printf("%d\n",reorder( ctrl, W));
+  reorder( ctrl, W);
   // Spedisci i pacchetti in ordine (+ timer dopo il primo).
   packet pack;
   int r;
@@ -246,6 +249,10 @@ void alarm_handler( int signum)
     memcpy((void *)pack.data, (void *) &buffer[(ctrl[i].position)*MAXLINE], MAXLINE*sizeof(char));
     //printf("%d %s\n",ctrl[i].position, (char *)pack.data);
     if(sendto(sockfd, (const void *)&pack, sizeof(packet), 0, (struct sockaddr*) &servaddr, sizeof(servaddr))==-1)printf("ERRORE\n");
+    if (i==0)
+    {
+      alarm(T);
+    }
   }
 }
 
@@ -284,7 +291,9 @@ void TCPfunction(int given_fd, int32_t seqnumb, int32_t acknumb, int given_sockf
   pthread_create(&tid_ack, NULL, thread_ack, NULL);
 
   pthread_join(tid_write, NULL);
-  pthread_join(tid_send, NULL);
   pthread_join(tid_ack, NULL);
+  pthread_join(tid_send, NULL);
+
+  return(0);
 
 }
