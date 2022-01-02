@@ -34,7 +34,7 @@ volatile int state=CLOSED;
 int sockfdglb;
 pthread_t  tidglb;
 int32_t seqN,ackN;
-
+int newPort;
 
 
 void *makeconnection(void *arg){
@@ -52,6 +52,8 @@ void *makeconnection(void *arg){
 	
 	pac.seqnumb=r;
 	pac.flags.syn=1;
+	printf("il pacchetto da mandare la prima volta1:\n %d \n %d \n %d \n %d\n %s ",pac.seqnumb,pac.acknumb,pac.flags.ack,pac.flags.syn,pac.data);
+	fflush(stdout);
 	if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)arg, len ) < 0) {
 		perror("errore in sendto 1");
 		exit(1);
@@ -67,12 +69,17 @@ void *makeconnection(void *arg){
 		}
 		if(pacrcv.flags.ack == 1 && pacrcv.flags.syn == 1){
 			state = ESTABLISHED;
+			printf("il pacchetto ricevuto:\n %d \n %d \n %d \n %d\n %s ",pacrcv.seqnumb,pacrcv.acknumb,pacrcv.flags.ack,pacrcv.flags.syn,pacrcv.data);	
+			newPort = atoi(pacrcv.data);
+			printf("\n\n**********************risultato dell atoi %d**********************************\n\n",newPort);	
 			memset((void *)&pac,0,sizeof(packet));
+
 			pac.seqnumb = r;
 			pac.flags.ack = 1;
 			pac.flags.syn=0;
 			pac.acknumb = pacrcv.seqnumb + 1;
 			ackN = pac.acknumb;
+			printf("il pacchetto da mandare:\n %d \n %d \n %d \n %d\n %s ",pac.seqnumb,pac.acknumb,pac.flags.ack,pac.flags.syn,pac.data);
 			if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)arg , len) < 0) {
 				perror("errore in sendto 2");
 				exit(1);
@@ -169,7 +176,7 @@ void *myconnect(void *arg){
 
 int main(int argc, char *argv[ ]) {
 
-	int   sockfd, n,i=0,resRequest;
+	int   sockfd, n,i=0,resRequest,newsockfd, file_descriptor;
 	void *status;
 	pthread_t tid;
 	
@@ -211,12 +218,11 @@ int main(int argc, char *argv[ ]) {
 	  exit(1);  //gestisci lo stato e l errore 
 	}
 
+	//aggiorno il numero della porta
+	printf("new port = %d",newPort);
+	servaddr.sin_port = newPort;  /* assegna la porta del server */
 	memset((void *)&packet,0,sizeof(packet));
-
-
-	// preso il comando
-
-
+	printf("il server che voglio raggiungere sta alla porta %us\n",servaddr.sin_port);
 	printf("\n\n*********************la connessione e stabilita: %d*********************\n\n",state);
 while(1){
 	printf("\n\n*********************digita un comando*********************\n\ncomandi disponibili: [list,put,get,delete]");
@@ -300,9 +306,9 @@ while(1){
 			createFirstPac(&packet,seqN,ackN,command2);
 			printf("il pacchetto da mandare contiene:\n %d \n %d \n %d \n %d\n %s ",packet.seqnumb,packet.acknumb,packet.flags.ack,packet.flags.syn,packet.data);
 			if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
-				
+				file_descriptor = open("copy.txt",O_CREAT|O_TRUNC|O_RDWR,0666);
 				printf("pacchetto mandato correttamente\n\n");
-				
+				rcv(sockfd,&servaddr,file_descriptor,ackN,seqN);
 			}
 			else{
 				printf("/n/n*********************************file non presente nel server*********************************************/n/n");
