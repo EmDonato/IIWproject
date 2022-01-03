@@ -33,7 +33,7 @@ struct sockaddr_in servaddr;
 
 pthread_t tid_write, tid_send, tid_ack;
 
-int sockfd;
+int sockfd1;
 
 char *buffer;
 
@@ -48,6 +48,8 @@ FILE *fp;
 int fd;
 
 int n_pkts;
+
+int last_seqn;
 
 int red_bytes[BUFFER_SIZE] = {0};
 
@@ -90,7 +92,11 @@ void *thread_write()
   lseek(fd, 0L, SEEK_SET);
   // Calcola quanti blocchi serviranno
   n_pkts = size % MAXLINE ? size/MAXLINE + 1 : size/MAXLINE;
+
+  last_seqn = seqn + (n_pkts-1)*(MAXLINE+1); //CHIEDERE CONFERMA
   
+  printf("seqn = %d last_seqn = %d + %d + %d = %d \n", seqn, seqn, n_pkts, size, last_seqn);
+
   // Popola i pacchetti
   for ( i = 0; i < n_pkts; i++)
   {    
@@ -112,7 +118,7 @@ void *thread_send()
   // loop di invio. 
   while( 1)
   {
-    printf("sending pkt %d\n", seqn);
+    //printf("sending pkt %d\n", seqn);
     // wait <t, 1>
     sem_wait(&sem_T);
     // wait <r[i], 1>
@@ -120,10 +126,11 @@ void *thread_send()
 
     // compila il pacchetto.
     pack.seqnumb = (int32_t) seqn;
+    pack.acknumb = (int32_t) ackn;
     memset((void*   )pack.data, 0, MAXLINE*sizeof(char));
     memcpy((void *)pack.data, (void *) &buffer[i*MAXLINE], MAXLINE*sizeof(char));
     pack.data_size = red_bytes[i];
-    if ((int)seqn == n_pkts-1)
+    if ((int)seqn == last_seqn)
     {
       pack.last = true;
     }
@@ -137,7 +144,7 @@ void *thread_send()
     {
       if( ctrl[j].overwritable)
       {
-        ctrl[j].acknumb = seqn + 1;
+        ctrl[j].acknumb = ackn;
         ctrl[j].seqnumb = seqn;
         ctrl[j].position = i;
         ctrl[j].overwritable = false;
@@ -146,12 +153,14 @@ void *thread_send()
         break;
       }
     }
+    seqn = seqn + 1 + red_bytes[i];
+
     i = (i + 1) % BUFFER_SIZE;
     //printf("%s",  pack.data);
 
-    sendto(sockfd, (const void *)&pack, sizeof(packet), 0, (struct sockaddr*) &servaddr, sizeof(servaddr));
+    printf("THREAD send: seqnumb = %d acknumb = %d \n", pack.seqnumb, pack.acknumb);
+    sendto(sockfd1, (const void *)&pack, sizeof(packet), 0, (struct sockaddr*) &servaddr, sizeof(servaddr));
     
-    seqn++;
     if( !timer)
     {
       // imposta un timer.
@@ -173,16 +182,26 @@ void *thread_ack()
   int32_t ack;
   int i, aux = 0;
   while(1)
-  {
+  { 
 
-    recvfrom(sockfd, temp, sizeof(packet), 0, (struct sockaddr*)&servaddr, &addr_size);
+    reorder( ctrl, W);
+    for (int i = 0; i < W; i++)
+    {
+      if (ctrl[i].overwritable == false)
+      {
+        ack_atteso = ctrl[i].seqnumb+ctrl[i].data_size+1;
+        printf("THREAD ack: %d = %d + %d + 1 \n", ack_atteso, ctrl[i].seqnumb, ctrl[i].data_size);
+        break;
+      }
+    }
+    recvfrom(sockfd1, temp, sizeof(packet), 0, (struct sockaddr*)&servaddr, &addr_size);
     ack = temp -> acknumb;
-
+    printf("THREAD ack: ack = %d ack_atteso = %d \n", ack, ack_atteso);
     if (ack == ack_atteso)
     {
       for ( i = 0; i < W; i++)
       {
-        if ((ctrl[i].seqnumb + 1) == ack)
+        if ((ctrl[i].seqnumb + ctrl[i].data_size + 1) == ack)
         {
           ctrl[i].overwritable = true;
           sem_post(&sem_S[ctrl[i].position]);
@@ -196,16 +215,17 @@ void *thread_ack()
       }
 
       sem_post(&sem_T);
-      ack_atteso++;
+      //ack_atteso++;
     }
 
-
+    //rotta
+    
     if (ack > ack_atteso)
     {
       reorder(ctrl, W);
       for ( i = 0; i < W; i++)
       {
-        if (ctrl[i].seqnumb + 1 <= ack)
+        if (ctrl[i].seqnumb + 1 <= ack) //non so se sto +1 ci va
         {
           ctrl[i].overwritable = true;
           aux++;
@@ -219,8 +239,11 @@ void *thread_ack()
       }
       aux = 0;
     }
-    if (temp -> last == true)
+    
+    if (temp -> last == 1)
     {
+      printf("acked last packet.");
+      alarm(0);
       break;
     }
   } 
@@ -244,7 +267,7 @@ void alarm_handler( int signum)
     pack.data_size = ctrl[i].data_size;
     memcpy((void *)pack.data, (void *) &buffer[(ctrl[i].position)*MAXLINE], MAXLINE*sizeof(char));
     //printf("%d %s\n",ctrl[i].position, (char *)pack.data);
-    if(sendto(sockfd, (const void *)&pack, sizeof(packet), 0, (struct sockaddr*) &servaddr, sizeof(servaddr))==-1)printf("ERRORE\n");
+    if(sendto(sockfd1, (const void *)&pack, sizeof(packet), 0, (struct sockaddr*) &servaddr, sizeof(servaddr))==-1)printf("ERRORE\n");
     if (i==0)
     {
       alarm(T);
@@ -255,6 +278,7 @@ void alarm_handler( int signum)
 
 int sendFile(int given_fd, int32_t seqnumb, int32_t acknumb, int given_sockfd, struct sockaddr_in given_servaddr)
 {
+
 
   fd = given_fd;
   seqn = seqnumb;
@@ -275,7 +299,7 @@ int sendFile(int given_fd, int32_t seqnumb, int32_t acknumb, int given_sockfd, s
 
 
   servaddr = given_servaddr;
-  sockfd = given_sockfd;
+  sockfd1 = given_sockfd;
 
   for (int i = 0; i < W; i++)
   {

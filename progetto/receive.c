@@ -25,11 +25,13 @@ int makePac(packet *pac,int seqn,int ackn,int sizedata){
 		pac->seqnumb = seqn;
 		pac->acknumb = ackn;
 		pac->flags.ack = 1;
+		pac->last = false;
 	}
 	else{
 		pac->seqnumb = seqn;
 		pac->acknumb = ackn + sizedata + 1;
 		pac->flags.ack = 1;
+		pac->last = false;
 	}
 	return 0;
 }
@@ -40,13 +42,13 @@ int makeLastPac(packet *pac,int seqn,int ackn,int sizedata){
 		pac->seqnumb = seqn;
 		pac->acknumb = ackn;
 		pac->flags.ack = 1;
-		pac->last = 1;
+		pac->last = true;
 	}
 	else{
 		pac->seqnumb = seqn;
 		pac->acknumb = ackn + sizedata + 1;
 		pac->flags.ack = 1;
-		pac->last = 1;
+		pac->last = true;
 	}
 	return 0;
 }
@@ -81,7 +83,7 @@ int rcv(int socketID, struct sockaddr_in *add,int fileID,int32_t ackn,int32_t se
 			actualack = pacToSend.acknumb;
 			expectedack = actualack;
 			printf("creato il nuovo pacchetto\n\n");
-			if(pacchetto.last == 1){
+			if(pacchetto.last == true){
 				printf("dentro il last\n\n");
 				makeLastPac(&pacToSend,actualseqn,actualack,pacchetto.data_size);
 				if (sendto(socketID, (const void *)&pacToSend, sizeof(packet), 0, (struct sockaddr *)add, sizeof(struct sockaddr_in)) < 0) {
