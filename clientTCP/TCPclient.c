@@ -307,7 +307,9 @@ while(1){
 			
 		case 3:
 			printf("\n\n*********************digitato get*********************\n\n");
+			
 			createFirstPac(&packet,seqN,ackN,command2);
+			seqN = seqN + strlen(command2)+1;
 			printf("il pacchetto da mandare contiene:\n %d \n %d \n %d \n %d\n %s ",packet.seqnumb,packet.acknumb,packet.flags.ack,packet.flags.syn,packet.data);
 			if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
 				file_descriptor = open(cmd[1],O_CREAT|O_TRUNC|O_RDWR,0666);
