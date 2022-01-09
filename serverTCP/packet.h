@@ -69,6 +69,6 @@ void createFirstPac(packet *,int32_t,int32_t,char *);
 
 int sendRequest(int ,struct sockaddr_in *,packet *);
 
-int sendFile(int , int32_t , int32_t , int , struct sockaddr_in );
+int sendFile(int , int32_t , int32_t , int , struct sockaddr_in, float prob );
 
 int rcv(int , struct sockaddr_in * ,int ,int32_t ,int32_t );

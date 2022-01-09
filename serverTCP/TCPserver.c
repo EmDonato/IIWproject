@@ -171,7 +171,7 @@ int main(int argc, char **argv){
 								perror("ls");
 
 							fclose(fptr);
-							sendFile(fptr,sn ,an ,connsd, (struct sockaddr_in)client); 
+							//sendFile(fptr,sn ,an ,connsd, (struct sockaddr_in)client); 
 							remove(fptr);
 						break;
 						
@@ -250,7 +250,7 @@ int main(int argc, char **argv){
 									printf("il fil e presente\n\n");	
 									//apro il file
 	 								file_descriptor = open(cmd[1],O_RDWR,0666);
-									sendFile(file_descriptor,sn ,an ,connsd, (struct sockaddr_in)client); 				
+									sendFile(file_descriptor,sn ,an ,connsd, (struct sockaddr_in)client,0.1); 				
 								}
 								else{
 									makePacket(&pacchetto,sn,an,1);

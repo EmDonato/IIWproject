@@ -18,12 +18,13 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include "packet.h"
+#include <time.h>
 
 
 #define MAXLINE 1024     // dimensione campo data.
 #define BUFFER_SIZE 20  // dimensione del buffer.
 #define W 5             // dimensione finestra di invio.
-#define T 3            // tempo in secondi per il timer.
+#define T 1            // tempo in secondi per il timer.
 #define PORT 8080
 
 
@@ -53,6 +54,7 @@ int last_seqn;
 
 int red_bytes[BUFFER_SIZE] = {0};
 
+float p;
 
 
 
@@ -71,7 +73,9 @@ int printstruttura(packetsend array[], int size){
 	return 0;
 	
 }
-/* void alarm_handler( int signum)
+
+
+void alarm_handler( int signum)
 {
   printf("alarm\n");
   // Ordina array di packetsend. Funzione Ema.
@@ -80,21 +84,23 @@ int printstruttura(packetsend array[], int size){
   packet pack;
   int r;
   char foo[MAXLINE];
+  alarm(T);
   for (int i = 0; i < W; i++)
   {
-    pack.seqnumb = ctrl[i].seqnumb;
-    pack.acknumb = ctrl[i].acknumb;
-    pack.last = ctrl[i].last;
-    pack.data_size = ctrl[i].data_size;
-    memcpy((void *)pack.data, (void *) &buffer[(ctrl[i].position)*MAXLINE], MAXLINE*sizeof(char));
-    //printf("%d %s\n",ctrl[i].position, (char *)pack.data);
-    if(sendto(sockfd1, (const void *)&pack, sizeof(packet), 0, (struct sockaddr*) &servaddr, sizeof(servaddr))==-1)printf("ERRORE\n");
-    if (i==0)
+    if(ctrl[i].overwritable == false)
     {
-      alarm(T);
+      pack.seqnumb = ctrl[i].seqnumb;
+      pack.acknumb = ctrl[i].acknumb;
+      pack.last = ctrl[i].last;
+      pack.data_size = ctrl[i].data_size;
+      memcpy((void *)pack.data, (void *) &buffer[(ctrl[i].position)*MAXLINE], MAXLINE*sizeof(char));
+      //printf("%d %s\n",ctrl[i].position, (char *)pack.data);
+      if(sendto(sockfd1, (const void *)&pack, sizeof(packet), 0, (struct sockaddr*) &servaddr, sizeof(servaddr))==-1)printf("ERRORE\n");
     }
   }
-} */
+} 
+
+
 int reorder(packetsend array[], int size){
   packetsend temp;
   // loop to access each array element
@@ -201,6 +207,12 @@ void *thread_send()
 
     printf("THREAD send: seqnumb = %d acknumb = %d \n", pack.seqnumb, pack.acknumb);
     sendto(sockfd1, (const void *)&pack, sizeof(packet), 0, (struct sockaddr*) &servaddr, sizeof(servaddr));
+    if( !timer)
+    {
+      // imposta un timer.
+      alarm(T);
+      timer = true;
+    }
 
     if (pack.last == true)
     {
@@ -216,65 +228,139 @@ struct packet *temp = malloc(sizeof(struct packet));
 socklen_t addr_size = sizeof( struct sockaddr_in);
 int32_t ack;
 int i, aux = 0;
-while(1){ 
+int numb;
+double probaus;
+srand (time(NULL)); 
+while(1){
+    numb = rand();
+    probaus = (double)numb /(double)RAND_MAX; 
 		recvfrom(sockfd1, temp, sizeof(packet), 0, (struct sockaddr*)&servaddr, &addr_size);
-		ack = temp -> acknumb;
-		sem_wait(&sem_ctrl);
-		reorder(ctrl, W);
-		for(int i = 0; i <= W; i++){
-			if((ctrl[i].overwritable) == false)
-			{
-				ack_atteso = ctrl[i].seqnumb+ctrl[i].data_size+1;
-				break;
-			}
-		}
-		sem_post(&sem_ctrl);		
-		printf("THREAD ack: ack = %d ack_atteso = %d \n", ack, ack_atteso);
-		if (ack == ack_atteso)
-		{
-			sem_wait(&sem_ctrl);
-			for ( i = 0; i < W; i++){
-				if ((ctrl[i].seqnumb + ctrl[i].data_size + 1) == ack)
-				{
-				  ctrl[i].overwritable = true;
-				  sem_post(&sem_S[ctrl[i].position]);
-				  break;
-				}
-				if(i==W-1) 
-				{  
-				  printf("ERROR\n");
-				  exit(-1);
-				}
-			}
-			sem_post(&sem_T);
-			printf("\n\n********ack  pacchetto**********\n");
-			printstruttura(ctrl,W);
-			printf("\n\n********************************\n");
-			sem_post(&sem_ctrl);
-			//ack_atteso = ack_atteso + MAXLINE + 1;
-			
-			
-			if (temp -> last == 1){
-				  printf("acked last packet.");
-				  alarm(0);
-				  break;
-			}
-		}
-		
+		if(probaus<=p){
+      
+      printf("\n\n*******************pacchetto perso**********************\n\n");
+    }
+    else
+    {
+      ack = temp -> acknumb;
+  		sem_wait(&sem_ctrl);
+  		reorder(ctrl, W);
+  		for(int i = 0; i <= W; i++){
+  			if((ctrl[i].overwritable) == false)
+  			{
+  				ack_atteso = ctrl[i].seqnumb+ctrl[i].data_size+1;
+  				break;
+  			}
+  		}
+  		sem_post(&sem_ctrl);		
+  		printf("THREAD ack: ack = %d ack_atteso = %d \n", ack, ack_atteso);
+  		if (ack == ack_atteso)
+  		{
+  			sem_wait(&sem_ctrl);
+  			for ( i = 0; i < W; i++){
+  				if ((ctrl[i].seqnumb + ctrl[i].data_size + 1) == ack)
+  				{
+  				  ctrl[i].overwritable = true;
+  				  sem_post(&sem_S[ctrl[i].position]);
+  				  break;
+  				}
+  				if(i==W-1) 
+  				{  
+  				  printf("ERROR\n");
+  				  exit(-1);
+  				}
+  			}
+  			sem_post(&sem_T);
+  			printf("\n\n********ack  pacchetto**********\n");
+  			printstruttura(ctrl,W);
+  			printf("\n\n********************************\n");
+  			sem_post(&sem_ctrl);
+  			//ack_atteso = ack_atteso + MAXLINE + 1;
+        for (int i = 0; i < W; i++)
+        {
+          if ((ctrl[i].seqnumb > ack) && (ctrl[i].overwritable == false))
+          {
+            alarm(T);
+            timer = true;
+            break;
+          }
+        }
+  		}
+
+
+      if(ack > ack_atteso)
+      {
+        sem_wait(&sem_ctrl);
+        reorder(ctrl, W);
+        for (int i = 0; i < W; i++)
+        {
+          if ((ctrl[i].seqnumb < ack) && (ctrl[i].overwritable == false))
+          {
+            ctrl[i].overwritable = true;
+            sem_post(&sem_S[ctrl[i].position]);
+            sem_post(&sem_T);
+          }
+          else if ((ctrl[i].seqnumb > ack) && (ctrl[i].overwritable == false))
+          {
+            aux = 1;
+          }
+        }
+        sem_post(&sem_ctrl);
+        if (aux == 1)
+        {
+          alarm(T);
+          timer = true;
+          aux = 0;
+        }
+      }
+
+      if (temp -> last == 1){
+            printf("acked last packet.");
+            alarm(0);
+            timer = false;
+            break;
+      }
+    }
 	} 
 }
 
 
-int sendFile(int given_fd, int32_t seqnumb, int32_t acknumb, int given_sockfd, struct sockaddr_in given_servaddr)
+int sendFile(int given_fd, int32_t seqnumb, int32_t acknumb, int given_sockfd, struct sockaddr_in given_servaddr, float prob)
 {
 
-
+  p = prob;
   fd = given_fd;
   seqn = seqnumb;
   ack_atteso = seqnumb + MAXLINE + 1;
   ackn = acknumb;
   buffer = (char*) malloc(BUFFER_SIZE*MAXLINE*sizeof(char));
 	//signal( SIGALRM, alarm_handler);
+  
+  struct sigaction act;
+    sigset_t set ;
+    sigfillset(&set);
+    memset((void *)&act,0,sizeof(struct sigaction));
+
+    if((sigprocmask(SIG_BLOCK,&set,NULL))==-1){
+        printf("errore nel settare i segnali");
+        exit(1);
+    }
+
+    act.sa_mask=set;
+    act.sa_handler=alarm_handler;
+    if((sigaction(SIGALRM,&act,NULL))==-1){
+        printf("errore nel settare i segnali");
+        exit(1);
+    }
+    if(sigemptyset(&set)) exit(1);
+    if(sigaddset(&set,SIGALRM)) exit(1);
+    if(sigaddset(&set,SIGINT)) exit(1);
+
+
+    if((sigprocmask(SIG_UNBLOCK,&set,NULL))==-1){
+        printf("errore nel settare i segnali\n");
+        exit(1);
+    }
+
   // Inizializza semafori.
   for (int i = 0; i < BUFFER_SIZE; i++)
   {
