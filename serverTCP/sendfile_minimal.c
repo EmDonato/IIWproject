@@ -20,7 +20,7 @@
 #include "packet.h"
 
 
-#define MAXLINE 128     // dimensione campo data.
+#define MAXLINE 1024     // dimensione campo data.
 #define BUFFER_SIZE 20  // dimensione del buffer.
 #define W 5             // dimensione finestra di invio.
 #define T 3            // tempo in secondi per il timer.
@@ -212,60 +212,56 @@ void *thread_send()
 
 void *thread_ack()
 {
-  struct packet *temp = malloc(sizeof(struct packet));
-  socklen_t addr_size = sizeof( struct sockaddr_in);
-  int32_t ack;
-  int i, aux = 0;
-  while(1)
-  { 
-    recvfrom(sockfd1, temp, sizeof(packet), 0, (struct sockaddr*)&servaddr, &addr_size);
-    ack = temp -> acknumb;
-    printf("THREAD ack: ack = %d ack_atteso = %d \n", ack, ack_atteso);
-    if (ack == ack_atteso)
-    {
-	  sem_wait(&sem_ctrl);
-      for ( i = 0; i < W; i++)
-      {
-        if ((ctrl[i].seqnumb + ctrl[i].data_size + 1) == ack)
-        {
-          ctrl[i].overwritable = true;
-          sem_post(&sem_S[ctrl[i].position]);
-          break;
-        }
-        if(i==W-1) 
-        {  
-          printf("ERROR\n");
-          exit(-1);
-        }
-      }
-
-
-      
-    }
-	  sem_post(&sem_T);
-	  	printf("\n\n********ack  pacchetto**********\n");
-		printstruttura(ctrl,W);
-		printf("\n\n********************************\n");
-	  sem_post(&sem_ctrl);
-    //ack_atteso = ack_atteso + MAXLINE + 1;
-	sem_wait(&sem_ctrl);
-	reorder(ctrl, W);
-	
-	for(int i = 0; i <= W; i++){
-		if((ctrl[i].overwritable) == false)
-		{
-			ack_atteso = ctrl[i].seqnumb+ctrl[i].data_size+1;
-			break;
+struct packet *temp = malloc(sizeof(struct packet));
+socklen_t addr_size = sizeof( struct sockaddr_in);
+int32_t ack;
+int i, aux = 0;
+while(1){ 
+		recvfrom(sockfd1, temp, sizeof(packet), 0, (struct sockaddr*)&servaddr, &addr_size);
+		ack = temp -> acknumb;
+		sem_wait(&sem_ctrl);
+		reorder(ctrl, W);
+		for(int i = 0; i <= W; i++){
+			if((ctrl[i].overwritable) == false)
+			{
+				ack_atteso = ctrl[i].seqnumb+ctrl[i].data_size+1;
+				break;
+			}
 		}
-	}
-	sem_post(&sem_ctrl);
-    if (temp -> last == 1)
-    {
-      printf("acked last packet.");
-      alarm(0);
-      break;
-    }
-  } 
+		sem_post(&sem_ctrl);		
+		printf("THREAD ack: ack = %d ack_atteso = %d \n", ack, ack_atteso);
+		if (ack == ack_atteso)
+		{
+			sem_wait(&sem_ctrl);
+			for ( i = 0; i < W; i++){
+				if ((ctrl[i].seqnumb + ctrl[i].data_size + 1) == ack)
+				{
+				  ctrl[i].overwritable = true;
+				  sem_post(&sem_S[ctrl[i].position]);
+				  break;
+				}
+				if(i==W-1) 
+				{  
+				  printf("ERROR\n");
+				  exit(-1);
+				}
+			}
+			sem_post(&sem_T);
+			printf("\n\n********ack  pacchetto**********\n");
+			printstruttura(ctrl,W);
+			printf("\n\n********************************\n");
+			sem_post(&sem_ctrl);
+			//ack_atteso = ack_atteso + MAXLINE + 1;
+			
+			
+			if (temp -> last == 1){
+				  printf("acked last packet.");
+				  alarm(0);
+				  break;
+			}
+		}
+		
+	} 
 }
 
 
