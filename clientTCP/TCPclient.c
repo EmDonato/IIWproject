@@ -313,7 +313,7 @@ while(1){
 			printf("il pacchetto da mandare contiene:\n %d \n %d \n %d \n %d\n %s ",packet.seqnumb,packet.acknumb,packet.flags.ack,packet.flags.syn,packet.data);
 			if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
 				file_descriptor = open(cmd[1],O_CREAT|O_TRUNC|O_RDWR,0666);
-				rcv(sockfd,&servaddr,file_descriptor,ackN,seqN);
+				rcv_prob(sockfd,&servaddr,file_descriptor,ackN,seqN,0.1);
 			}
 			else{
 				printf("/n/n*********************************file non presente nel server*********************************************/n/n");
