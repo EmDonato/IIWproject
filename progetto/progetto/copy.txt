@@ -1,4 +1,0 @@
- write() writes up to count bytes from the buffer starting at buf
-to the file referred to by the file descriptor fd.
-
- The nu
