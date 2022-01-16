@@ -1,0 +1,15 @@
+video.mp4
+song2.wav
+server.out
+server
+sendfile_minimal.c
+sendfile.c
+receive.c
+packet.h
+list_temp.txt
+gattini.jpg
+function.c
+TEST.txt
+TCPserver.c
+..
+.
