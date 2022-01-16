@@ -20,9 +20,8 @@
 #include "packet.h"
 
 #define SERV_PORT   5193 
-#define SIZE  128 
 
-// ******************************************************manda un  pacchetto per debug**********************************
+// variabili globali
 
 key_t semkey = 12345;
 int sockfd, connsd;
@@ -40,12 +39,21 @@ extern int32_t snprc;
 extern int32_t anprc;
 char cmd[2][64];
 char * aus;
-//******************************************************variabili globali per contenere i numeri sequenza e ack del server**********************************
+
 
 
 
 
 int main(int argc, char **argv){
+	
+/* 	sezione principale del programma del server.
+	Il programma e organizzato da iun main thread che si occupa
+	della gestine della connessione dei client
+	sucecssivamente verranno chiamati programmi figli che gestiranno autonomamente 
+	le richieste dei client 
+	 */
+	
+	// dichiarazione variabili
 	
 	int i,file_descriptor;
 	pid_t pid;
@@ -64,21 +72,16 @@ int main(int argc, char **argv){
 	int32_t sn;
 	int32_t an;
 	int32_t *arrayNumb = (int32_t *)malloc(sizeof(int32_t)*2);
+	float prob = PROB;
 	
-	
+	// getstione semaforo
 	if ((semID = semget(semkey, 1, IPC_CREAT|0666)) == -1)
 		goto exit_process_1;
 	
 	if (semctl(semID, 0, SETVAL, 0) == -1)
 		goto exit_process_1;
 	
-	
-	/*
-		Gestione del segnale SIGINT
-
-	*/
-
-	
+	//gestione del segnale SIGINT
 	sigfillset(&set);
 	struct sigaction act;
 	act.sa_mask = set;
@@ -86,7 +89,8 @@ int main(int argc, char **argv){
 	sigaction(SIGINT,&act,NULL);
 
 	int reu =1;
-
+	
+	// creazione del socket
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
 		perror("errore in socket");
 		exit(1); 
@@ -98,17 +102,13 @@ int main(int argc, char **argv){
 	addr.sin_addr.s_addr = htonl(INADDR_ANY); /* il server accetta pacchetti su una qualunque delle sue interfacce di rete */
 	addr.sin_port = htons(SERV_PORT); /* numero di porta del server */
 	
-	
-	
-	// if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reu, sizeof(int)) < 0)
-		 // perror("setsockopt(SO_REUSEADDR) failed");
-	
 	  /* assegna l'indirizzo al socket */
 	if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
 		perror("errore in bind");
 		exit(1);
 	}
-	printf("dentro il main\n");
+	printf("\n\n******************************* SERVER ATTIVO ******************************\n\n");
+	// nel thread per handshaking
 	if (pthread_create(&tid,NULL,mylisten,(void *)arrayNumb) != 0 ) {
 		perror("errore in mylisten");
 		exit(1);
@@ -116,32 +116,37 @@ int main(int argc, char **argv){
 	
 	
 	while(1){
-		printf("*************************still alive*****************************\n\n");
-		fflush(stdout);
-		int connsd = myaccept(sockfd,&addr,&len);
-		printf("\n **************sockfd %d,connsd %d********************\n ",sockfd,connsd);
-	
-		fflush(stdout);
+
+		int connsd = myaccept(sockfd,&addr,&len); // funzione che accetta le connessioni 
+
 		if ( (pid = fork()) == 0) {
+			// dentro il processo figlio che si occupa della gestione del client associato
 			close(sockfd);
-			
-			
-			printf("\n\n*******************************nel processo figlio: gestione della richiesta******************************\n\n"); 
-			printf("il numero di socket del padre %d\n\n",sockfd);
-			printf("il numero di socket e %d\n\n",connsd);
-			printf("lindirizzo del client da servire\nporta: %d\nIP: %d\n ",client.sin_port, client.sin_addr.s_addr);
+			printf("NUOVO CLIENT\n\n");
+			getsockname(connsd, (struct sockaddr *)&addr,&len);
+			printf("porta: %d\nIP: %d\n ",addr.sin_port, client.sin_addr.s_addr);
 			memset((void *)&pacchetto,0,sizeof(packet));
 			while(1){
-				printf("*************************in loop**************************\n");
-				getsockname(connsd, (struct sockaddr *)&addr,&len);
-				printf("\n numero di sochet del figlio e numero di porta associato %d, %d*\n ",connsd,addr.sin_port);	
+
 				if((recvfrom(connsd,(void *)&pacchetto, sizeof(packet), 0 ,(struct sockaddr *) &client,&len )) < 0) {
 					perror("errore in recvfrom");
 					exit(1);
 				}			
-				printf("il pacchetto ricevuto dal figlio:\n %d \n %d \n %d \n %d\n %s ",pacchetto.seqnumb,pacchetto.acknumb,pacchetto.flags.ack,pacchetto.flags.syn,pacchetto.data);
+
 				if( pacchetto.flags.ack == 0  ){
-					printf("superato il controllo\n\n");
+					if(pacchetto.last == 1 ){
+						int32_t ausseq;
+						ausseq = pacchetto.seqnumb+pacchetto.data_size + 1;
+						pacchetto.seqnumb = pacchetto.acknumb;
+						pacchetto.acknumb = ausseq;
+						pacchetto.flags.ack = 1;
+						pacchetto.data_size = 0;
+						if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
+							perror("errore in sendto 1");
+							exit(1);
+						}
+					}
+
 					lendata = strlen(pacchetto.data);
 					sn = pacchetto.acknumb;
 					an = pacchetto.seqnumb + lendata + 1;
@@ -152,12 +157,12 @@ int main(int argc, char **argv){
 						i++;
 						aus = strtok (NULL, " ");	
 					}
-					printf("le due stringe arrivate sono cmd[0]%s cmd[1]%s il caso e %d la grandezza del data e %ld\n\n",cmd[0],cmd[1],strswitch(cmd[0]),lendata);
-					printf("numero sequenza %d numero atteso %d\n\n",pacchetto.seqnumb,((int32_t *)arrayNumb)[0]);
+
 					memset((void *)&pacchetto,0,sizeof(pacchetto));
 					switch(strswitch(cmd[0])) {
 						case 0:
-							printf("\n\n*********************in list*********************\n\n");
+
+							//nella sezione per la gestione del comando list
 							
 							makePacket(&pacchetto,sn,an,0);
 							if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
@@ -165,131 +170,108 @@ int main(int argc, char **argv){
 								exit(1);
 							}
 							
-							fptr = fopen("a.txt", "wb");	//Create a file with write permission
+							fptr = fopen("list_temp.txt", "w+");	
 							
-							if (ls(fptr) == -1)		//get the list of files in present directory
+							if (ls(fptr) == -1)		
 								perror("ls");
-
 							fclose(fptr);
-							//sendFile(fptr,sn ,an ,connsd, (struct sockaddr_in)client); 
-							remove(fptr);
+							file_descriptor = open("list_temp.txt",O_RDWR,0666);
+							sendFile(file_descriptor,sn ,an ,connsd, (struct sockaddr_in)client,PROB);							
+							remove("list_temp.txt");
+							
 						break;
 						
 						case 1:
 						
-							printf("\n\n*********************in delete*********************\n\n");	
-								if(access(cmd[1],F_OK) == 0){
-									strcpy(last_file,cmd[1]);
-									makePacket(&pacchetto,sn,an,0);
-									printf("il pacchetto da mandare1:\n %d \n %d \n %d \n %d\n %s ",pacchetto.seqnumb,pacchetto.acknumb,pacchetto.flags.ack,pacchetto.flags.syn,pacchetto.data);
-									remove(cmd[1]);
-									// metti variabile ausiliare
-									if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
-										perror("errore in sendto 1");
-										exit(1);
-									}						
-														
-								}
-								else{
-									if(strcmp(last_file,cmd[1]) == 0){
-										printf("file gia arrivato,ritrasmetto l ok\n\n");
-										makePacket(&pacchetto,sn,an,0);
-
-										if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
-											perror("errore in sendto 1");
-											exit(1);
-										}
-									}
-									else{
-										makePacket(&pacchetto,sn,an,1);
-										printf("il pacchetto da mandare1:\n %d \n %d \n %d \n %d\n %s ",pacchetto.seqnumb,pacchetto.acknumb,pacchetto.flags.ack,pacchetto.flags.syn,pacchetto.data);
-										if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
-											perror("errore in sendto 1");
-											exit(1);
-										}
-									}
+							//nella sezione per la gestione del comando delete 
+							if(access(cmd[1],F_OK) == 0){
+								// file presente, nella sezione di rimozione 
+								makePacket(&pacchetto,sn,an,0);
+								remove(cmd[1]);
+							
+								if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
+									perror("errore in sendto 1");
+									exit(1);
 								}						
-							break;
+													
+							}
+							else{
+								//file non presente 
+								makePacket(&pacchetto,sn,an,1);
+								if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
+									perror("errore in sendto 1");
+									exit(1);
+								}
+								
+							}						
+						break;
 
 						case 2:
-							printf("\n\n*********************in put*********************\n\n");
-								if(access(cmd[1],F_OK) == 0){
-									makePacket(&pacchetto,sn,an,1);
-									printf("il pacchetto da mandare1:\n %d \n %d \n %d \n %d\n %s ",pacchetto.seqnumb,pacchetto.acknumb,pacchetto.flags.ack,pacchetto.flags.syn,pacchetto.data);
-									if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
-										perror("errore in sendto 1");
-										exit(1);
-									}
-									
-									
-									
-									
+						
+							//nella sezione per la gestione del comando put
+							
+							if(access(cmd[1],F_OK) == 0){
+								//file presente nel server 
+								makePacket(&pacchetto,sn,an,1);
+								if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
+									perror("errore in sendto 1");
+									exit(1);
 								}
-								else{
-									makePacket(&pacchetto,sn,an,0);
-									printf("il pacchetto da mandare1:\n %d \n %d \n %d \n %d\n %s ",pacchetto.seqnumb,pacchetto.acknumb,pacchetto.flags.ack,pacchetto.flags.syn,pacchetto.data);
-									if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
-										perror("errore in sendto 1");
-										exit(1);
-									}	
-									// creo il file	
-									file_descriptor = open(cmd[1],O_CREAT|O_TRUNC|O_RDWR,0666);
-									rcv(connsd,&client,file_descriptor,an,sn);
-								}
+								
+								
+								
+								
+							}
+							else{
+								//file non presente nel server 
+								makePacket(&pacchetto,sn,an,0);
+								if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
+									perror("errore in sendto 1");
+									exit(1);
+								}	
+								file_descriptor = open(cmd[1],O_CREAT|O_TRUNC|O_RDWR,0666);
+								rcv_prob(connsd,&client,file_descriptor,an,sn,PROB);
+							}
 						break;
 							
 						case 3:
-							printf("\n\n*********************in get*********************\n\n");
-								if(access(cmd[1],F_OK) == 0){
-									makePacket(&pacchetto,sn,an,0);
-									printf("il pacchetto da mandare1:\n %d \n %d \n %d \n %d\n %s ",pacchetto.seqnumb,pacchetto.acknumb,pacchetto.flags.ack,pacchetto.flags.syn,pacchetto.data);
-									if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
-										perror("errore in sendto 1");
-										exit(1);
-									}
-									printf("il fil e presente\n\n");	
-									//apro il file
-	 								file_descriptor = open(cmd[1],O_RDWR,0666);
-									sendFile(file_descriptor,sn ,an ,connsd, (struct sockaddr_in)client,0.1); 				
+						
+							//nella sezione per la gestione del comando get 
+							
+							if(access(cmd[1],F_OK) == 0){
+								//file presente nel server, nella sezione perl invio
+								makePacket(&pacchetto,sn,an,0);
+								if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
+									perror("errore in sendto 1");
+									exit(1);
 								}
-								else{
-									makePacket(&pacchetto,sn,an,1);
-									printf("il fil non e presente\n\n");
-									printf("il pacchetto da mandare1:\n %d \n %d \n %d \n %d\n %s ",pacchetto.seqnumb,pacchetto.acknumb,pacchetto.flags.ack,pacchetto.flags.syn,pacchetto.data);
-									if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
-										perror("errore in sendto 1");
-										exit(1);
-									}							
-								}
+								file_descriptor = open(cmd[1],O_RDWR,0666);
+								sendFile(file_descriptor,sn ,an ,connsd, (struct sockaddr_in)client,PROB); 				
+							}
+							else{
+								//file non presente nel server 
+								makePacket(&pacchetto,sn,an,1);
+								if (sendto(connsd, (const void *)&pacchetto, sizeof(packet), 0, (struct sockaddr *)&client, sizeof(struct sockaddr)) < 0) {
+									perror("errore in sendto 1");
+									exit(1);
+								}							
+							}
 								
-						break;								
-						
-						
-						
-						
-						
-						
-					}
-					
-					
-					
+						break;									
+					}			
 				}
-			}
 				
-			 	
-			
-		}
-		printf("\n\n*************************PADRE DALL ALTRA PARTE*****************************\n\n");
-		
-		close(connsd); 
-		
-		
+			}		
+		}		
+		close(connsd); 		
 	}
 	
 	pthread_join(tid, &value);
 	exit_process_1:
 		semctl(semID, -1, IPC_RMID, 0);
+		
 
 	exit_process_4:
 		exit(1);
+		free((void *)&arrayNumb);
 }
