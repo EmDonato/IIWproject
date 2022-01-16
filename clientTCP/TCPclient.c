@@ -24,7 +24,7 @@
 #define ESTABLISHED 2
 
 /* dentro al main vi e la creazione el attesa del thread che andra ad occuparsi della connessone, ovvero il "my connaction". 
-Quest'ultimo e implementato in modo tale da farsi consegnare il segnale SIGALARM ogni 3 secondi, per tentare di ritentare la connessione
+Quest'ultimo e implementato in modo tale da farsi consegnare il segnale SIGALARM ogni 1 secondi, per tentare di ritentare la connessione
 se il server non trasmette l ack del syn. la gestione del segnale e compito della funzione delete, la quale va a cancellare il thread maeconnection, 
 il thread che implementa verametelo scambio di pacchetti, quest ultimo thread manda pacchetti e cambia lo stato del client, fino a quando non e ESTABLISHED 
 attende l ack del server, se lo riceve cambia stato e invia il pacchetto di conferma */
@@ -35,70 +35,70 @@ int sockfdglb;
 pthread_t  tidglb;
 int32_t seqN,ackN;
 int newPort;
-
+struct sockaddr_in   servaddr;
 
 void *makeconnection(void *arg){
 	
+	//thread per la gestionedella connessione, si occupa del handshaking
 	
-	//printf("dentro la funione della connessione\n"); 
 	struct sockaddr_in servaddrrcv;
 	packet pac,pacrcv;
 	srand(time(NULL));
-	int n,len =sizeof(struct sockaddr_in);
+	int n, len =sizeof(struct sockaddr_in);
 	int32_t r = rand(); //numero della sequenza
 	seqN = r;
 	memset((void *)&pac,0,sizeof(packet));
 	// inizializzazione del pacchetto
-	
+	int numb;
+	float probaus;	
+	srand (time(NULL));		
+	numb = rand();
+	probaus = (double)numb /(double)RAND_MAX;
 	pac.seqnumb=r;
 	pac.flags.syn=1;
-	printf("il pacchetto da mandare la prima volta1:\n %d \n %d \n %d \n %d\n %s ",pac.seqnumb,pac.acknumb,pac.flags.ack,pac.flags.syn,pac.data);
-	fflush(stdout);
+
 	if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)arg, len ) < 0) {
 		perror("errore in sendto 1");
 		exit(1);
 	}
 	state = SYN_SEND;
-	printf("lo stato e: %d\n",state);
 	while(state != ESTABLISHED){
 		
 		n = recvfrom(sockfdglb,(void *)&pacrcv, sizeof(packet), 0 ,(struct sockaddr *)&servaddrrcv,&len ); // ************checkare se viene dallo stesso indirizzo ip********
-		if (n < 0) {
-			perror("errore in recvfrom");
-			exit(1);
-		}
-		if(pacrcv.flags.ack == 1 && pacrcv.flags.syn == 1){
-			state = ESTABLISHED;
-			printf("il pacchetto ricevuto:\n %d \n %d \n %d \n %d\n %s ",pacrcv.seqnumb,pacrcv.acknumb,pacrcv.flags.ack,pacrcv.flags.syn,pacrcv.data);	
-			newPort = atoi(pacrcv.data);
-			printf("\n\n**********************risultato dell atoi %d**********************************\n\n",newPort);	
-			memset((void *)&pac,0,sizeof(packet));
+		if(probaus<=PROB){
 
-			pac.seqnumb = r;
-			pac.flags.ack = 1;
-			pac.flags.syn=0;
-			pac.acknumb = pacrcv.seqnumb + 1;
-			ackN = pac.acknumb;
-			printf("il pacchetto da mandare:\n %d \n %d \n %d \n %d\n %s ",pac.seqnumb,pac.acknumb,pac.flags.ack,pac.flags.syn,pac.data);
-			if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)arg , len) < 0) {
-				perror("errore in sendto 2");
+		}
+		else{
+			if (n < 0) {
+				perror("errore in recvfrom");
 				exit(1);
 			}
+			if(pacrcv.flags.ack == 1 && pacrcv.flags.syn == 1){
+				state = ESTABLISHED;
+				newPort = atoi(pacrcv.data);
+				memset((void *)&pac,0,sizeof(packet));
+
+				pac.seqnumb = r;
+				pac.flags.ack = 1;
+				pac.flags.syn=0;
+				pac.acknumb = pacrcv.seqnumb + 1;
+				ackN = pac.acknumb;
+				if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)arg , len) < 0) {
+					perror("errore in sendto 2");
+					exit(1);
+				}
+			}
 		}
-		
 	}
 	pthread_exit(0);
- 
-	
 }
 
 
 
 void delete(int sig){
 	
-	
+	// gestione del segnale SIGINT
 	if(state!=ESTABLISHED){
-		printf("dentro la funzione che cancella l pid; %ld\n",tidglb);
 		pthread_cancel(tidglb);
 		state=CLOSED;
 	}
@@ -110,38 +110,29 @@ void delete(int sig){
 
 void *myconnect(void *arg){
 	
+	//thread principale per la connessione 
 	
 	pthread_t tid;
-	
 	void *status;
-	// struttura per la gestione del segnale che non vogliamo ignorare o in generale vogliamo cambiargli lo stato
+	// inizializzazione gestione del segnale
 	struct sigaction act;
-	// maschera di bit per la gestione del blocco dei segnali
 	sigset_t set ;
-	// tutto a 1
 	sigfillset(&set);
-	// azzeriamo la struttura 
 	memset((void *)&act,0,sizeof(struct sigaction));
-// rendiamo valida la bitmap bloccando tutto quello a 1
 	if((sigprocmask(SIG_BLOCK,&set,NULL))==-1){
 		printf("errore nel settare i segnali");
 		exit(1);
 	
 	}
-	// inizializiamo la struttura gli diamo la maskera e la funzione 
 	act.sa_mask = set;
-	act.sa_handler = delete;//scrivere la funzione //capire come mandare gli argomenti 
-	// cambiamo lo stato e gestiamo il segnale 
+	act.sa_handler = delete;
 	if((sigaction(SIGALRM,&act,NULL))==-1){
 		printf("errore nel settare i segnali");
 		exit(1);
 	}
-	// azzeriamo la bitmap
 	if(sigemptyset(&set)) exit(1);
-	// mettiamo a 1 i segnali che vogliamo gestire
 	if(sigaddset(&set,SIGALRM)) exit(1);
 	if(sigaddset(&set, SIGINT)) exit(1);
-	// tutti quelli a 0 rimangono bloccati gli 1 sbloccati
 	if((sigprocmask(SIG_UNBLOCK,&set,NULL))==-1){
 		printf("errore nel settare i segnali\n");
 		exit(1);
@@ -152,13 +143,12 @@ void *myconnect(void *arg){
 	
 	while(state!=ESTABLISHED){
 		//metto la sveglia
-		alarm(3);
+		alarm(1);
 		if(pthread_create(&tid,NULL,makeconnection, arg)!=0){//metti gli argmenti 
 			exit(1);
 		}
 		
 		tidglb=tid;
-		printf("tidglb ha questo tid: %ld\n",tidglb);
 		if((pthread_join(tid, &status) ) == -1){
 	         exit(1);  //gestisci lo stato e l errore 
             }
@@ -169,7 +159,29 @@ void *myconnect(void *arg){
 	
 }
 	
-
+void *echo_last(void * arg){
+	
+	//funzione che gestisce la perdita dell ultimo pacchetto del file 
+	packet pac;
+	int32_t aus;
+	int len = sizeof(struct sockaddr);
+	while(1){
+		if((recvfrom(sockfdglb,(void *)&pac, sizeof(packet), 0 ,(struct sockaddr *)&servaddr,&len )) < 0) {
+			perror("errore in recvfrom");
+			exit(1);
+		}
+		aus = pac.seqnumb+pac.data_size + 1;
+		pac.seqnumb = pac.acknumb;
+		pac.acknumb = aus;
+		pac.flags.ack = 1;
+		pac.data_size = 0;
+		if (sendto(sockfdglb, (const void *)&pac, sizeof(packet), 0, (struct sockaddr *)&servaddr, len) < 0) {
+			perror("errore in sendto 1");
+			exit(1);
+		}
+	}
+	pthread_exit((void *)0);
+}
 
 
 
@@ -178,33 +190,30 @@ int main(int argc, char *argv[ ]) {
 
 	int   sockfd, n,i=0,resRequest,newsockfd, file_descriptor;
 	void *status;
-	pthread_t tid;
-	
-	struct    sockaddr_in   servaddr;
+	pthread_t tid,tid_echo;
 	packet packet;
 	memset((void *)&packet,0,sizeof(packet));
 	char command[128], command2[128];
 	char cmd[2][64];
 	char * aus;
 	if (argc != 2) { /* controlla numero degli argomenti */
-	fprintf(stderr, "utilizzo: daytime_clientUDP <indirizzo IP server>\n");
+	fprintf(stderr, "utilizzo: TCPclient  <indirizzo IP server>\n");
 	exit(1);
 	}
 
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) { /* crea il socket */
-	perror("errore in socket");
-	exit(1);
+		perror("errore in socket");
+		exit(1);
 	}
 	sockfdglb=sockfd;
-
 	memset((void *)&servaddr, 0, sizeof(servaddr));      /* azzera servaddr */
 	servaddr.sin_family = AF_INET;       /* assegna il tipo di indirizzo */
 	servaddr.sin_port = htons(SERV_PORT);  /* assegna la porta del server */
 	/* assegna l'indirizzo del server prendendolo dalla riga di comando. L'indirizzo � una stringa da convertire in intero secondo network byte order. */
 	if (inet_pton(AF_INET, argv[1], &servaddr.sin_addr) <= 0) {
-				/* inet_pton (p=presentation) vale anche per indirizzi IPv6 */
-	fprintf(stderr, "errore in inet_pton per %s", argv[1]);
-	exit(1);
+					/* inet_pton (p=presentation) vale anche per indirizzi IPv6 */
+		fprintf(stderr, "errore in inet_pton per %s", argv[1]);
+		exit(1);
 	}
 
 
@@ -217,112 +226,95 @@ int main(int argc, char *argv[ ]) {
 	if((pthread_join(tid, &status) ) == -1){
 	  exit(1);  //gestisci lo stato e l errore 
 	}
-
 	//aggiorno il numero della porta
-	printf("new port = %d",newPort);
 	servaddr.sin_port = newPort;  /* assegna la porta del server */
 	memset((void *)&packet,0,sizeof(packet));
-	printf("il server che voglio raggiungere sta alla porta %us\n",servaddr.sin_port);
-	printf("\n\n*********************la connessione e stabilita: %d*********************\n\n",state);
-while(1){
-	printf("\n\n*********************digita un comando*********************\n\ncomandi disponibili: [list,put,get,delete]");
-	memset((void *)cmd,0,sizeof(int32_t)*2);
-	
-	scanf("%[^\n]",command);
-	getchar();
-	printf("il comando e %s\n\n",command);
-	stpcpy(command2,command);
-	printf("il comando2 e %s\n\n",command2);
-	aus = strtok (command," ");
-	i = 0;
-	printf("aus e %s\n",aus);
-	while (aus != NULL)
-	{
-		printf("in strtok loop\n\n");
-		strcpy(cmd[i],aus);
-		i++;
-		aus = strtok (NULL, " ");
-		
-	}
-	if(i==2){
-		printf("il comando digitato e: %s\nsul file: %s\n",cmd[0],cmd[1]);
-	}
-	else{
-		printf("il comando digitato e: %s\n",cmd[0]);
-	}
-	
-	// finito di prendere il comando
-	
-	
-	//gestione del comando 
-	
-	switch(strswitch(cmd[0])) {
-		
-		case 0:
-			printf("\n\n*********************digitato list*********************\n\n");
-			createFirstPac(&packet,seqN,ackN,command2);
-			printf("il pacchetto da mandare contiene:\n %d \n %d \n %d \n %d\n %s ",packet.seqnumb,packet.acknumb,packet.flags.ack,packet.flags.syn,packet.data);
-			if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
-				
-				printf("pacchetto mandato correttamente\n\n");
-				file_descriptor = open("list.txt",O_CREAT|O_TRUNC|O_RDWR,0666);
-				rcv(sockfd,&servaddr,file_descriptor,ackN,seqN);
-				
-			}
-			else{
-				printf("/n/n*********************************problema con la list*********************************************/n/n");
-			}
-			break;
-		
-		case 1:
-			printf("\n\n*********************digitato delete*********************\n\n");
-			createFirstPac(&packet,seqN,ackN,command2);
-			seqN = seqN + strlen(command2)+1;
-			printf("il pacchetto da mandare contiene:\n %d \n %d \n %d \n %d\n %s ",packet.seqnumb,packet.acknumb,packet.flags.ack,packet.flags.syn,packet.data);
-			if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
-				
-				printf("pacchetto mandato correttamente\n\n");
-				
-			}	
-			else{
-				printf("/n/n*********************************file non presente nel server*********************************************/n/n");
-			}
-		break;
 
-		case 2:
-			printf("\n\n*********************digitato put*********************\n\n");
-			createFirstPac(&packet,seqN,ackN,command2);
-			seqN = seqN + strlen(command2)+1;
-			printf("il pacchetto da mandare contiene:\n %d \n %d \n %d \n %d\n %s ",packet.seqnumb,packet.acknumb,packet.flags.ack,packet.flags.syn,packet.data);
-			if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
+	while(1){
+		printf("\n\n*********************digita un comando*********************\n\ncomandi disponibili: [list,put,get,delete]");
+		memset((void *)cmd,0,sizeof(int32_t)*2);
+		pthread_create(&tid_echo,NULL,echo_last,NULL);
+		scanf("%[^\n]",command);
+		getchar();
+		stpcpy(command2,command);
+		aus = strtok (command," ");
+		i = 0;
+		while (aus != NULL)
+		{
+			strcpy(cmd[i],aus);
+			i++;
+			aus = strtok (NULL, " ");
+			
+		}
+	
+		pthread_cancel(tid_echo);//gestione perdita ack ultimo pacchetto
+		
+		
+		switch(strswitch(cmd[0])) {
+			
+			case 0:
+				// in list 
+				createFirstPac(&packet,seqN,ackN,command2);
+				seqN = seqN + strlen(command2)+1;
 				
-				printf("pacchetto mandato correttamente\n\n");
-				file_descriptor = open(cmd[1],O_RDWR,0666);
-				sendFile(file_descriptor,seqN ,ackN ,sockfd, (struct sockaddr_in)servaddr); 				
-			}
-			else{
-				printf("/n/n*********************************file gia presente nel server o non spazio disponibile sul server*********************************************/n/n");
-			}			
+				if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
+					
+					printf("\n\n************************************************** FILE NEL SERVER ******************************************************\n\n");
+					file_descriptor = open("list.txt",O_CREAT|O_TRUNC|O_RDWR,0666);
+					rcv_prob(sockfd,&servaddr,file_descriptor,ackN,seqN,PROB);
+					printfList("list.txt");
+					remove("list.txt");
+				}
+				else{
+					printf("\n\n*********************************problema con la list*********************************************\n\n");
+				}
+				break;
+			
+			case 1:
+				// in delete
+				createFirstPac(&packet,seqN,ackN,command2);
+				seqN = seqN + strlen(command2)+1;
+				if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
+					
+					printf("\n\n********************************* FILE CANCELLATO *********************************************\n\n");
+					
+				}	
+				else{
+					printf("\n\n*********************************file non presente nel server*********************************************\\n");
+				}
 			break;
-			
-		case 3:
-			printf("\n\n*********************digitato get*********************\n\n");
-			
-			createFirstPac(&packet,seqN,ackN,command2);
-			seqN = seqN + strlen(command2)+1;
-			printf("il pacchetto da mandare contiene:\n %d \n %d \n %d \n %d\n %s ",packet.seqnumb,packet.acknumb,packet.flags.ack,packet.flags.syn,packet.data);
-			if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
-				file_descriptor = open(cmd[1],O_CREAT|O_TRUNC|O_RDWR,0666);
-				rcv_prob(sockfd,&servaddr,file_descriptor,ackN,seqN,0.1);
-			}
-			else{
-				printf("/n/n*********************************file non presente nel server*********************************************/n/n");
-			}			
+
+			case 2:
+				// in put
+				createFirstPac(&packet,seqN,ackN,command2);
+				seqN = seqN + strlen(command2)+1;
+				if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
+					
+					file_descriptor = open(cmd[1],O_RDWR,0666);
+					sendFile(file_descriptor,seqN ,ackN ,sockfd, (struct sockaddr_in)servaddr,PROB); 	
+					printf("\n\n********************************* FILE SPEDITO *********************************************\n\n");
+
+				}
+				else{
+					printf("\n\n***********************file gia presente nel server o non spazio disponibile sul server**********************************\n\n");
+				}			
+			break;
+				
+			case 3:
+				// in get
+				createFirstPac(&packet,seqN,ackN,command2);
+				seqN = seqN + strlen(command2)+1;
+				if((resRequest = sendRequest(sockfd,&servaddr,&packet)) == 0){
+					file_descriptor = open(cmd[1],O_CREAT|O_TRUNC|O_RDWR,0666);
+					rcv_prob(sockfd,&servaddr,file_descriptor,ackN,seqN,PROB);
+					printf("\n\n********************************* FILE RICEVUTO *********************************************\n\n");
+
+				}
+				else{
+					printf("\n\n*********************************file non presente nel server*********************************************\n\n");
+				}			
 			break;			
+		}
 	}
-}
-	
-	
-	return 0;
-
+return 0;
 }
