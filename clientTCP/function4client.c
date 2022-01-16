@@ -27,32 +27,15 @@ struct sockaddr_in addrReserve;
 
 void retrasmition_cmd(int sig){
 
-	
-	
  	if (sendto(socketReserve, (const void *)&pacReserve, sizeof(packet), 0, (struct sockaddr *)&addrReserve, sizeof(struct sockaddr)) < 0) {
 		perror("errore in sendto 1");
 		exit(1);
 	}  
-	printf("il pacchetto da rimandare:\n %d \n %d \n %d \n %d\n %s ",pacReserve.seqnumb,pacReserve.acknumb,pacReserve.flags.ack,pacReserve.flags.syn,pacReserve.data);
-	fflush(stdout);
-	printf("\n\n**********************************nella gestione del segnale*******************************\n\n"); 
-	fflush(stdout);
+
 	alarm(T);  //imposta timer
 	
 	
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -97,13 +80,8 @@ int sendRequest(int socketID,struct sockaddr_in *add,packet *pac){
 	int len =  sizeof(struct sockaddr);
 	int32_t ackatteso = (pac->seqnumb + 1 + strlen(pac->data));
 	int32_t sqn = pac->seqnumb;
-	int32_t acn = pac->seqnumb;
-	
-	
-	
-struct sigaction act;
-
-
+	int32_t acn = pac->seqnumb;	
+	struct sigaction act;
 	// gestione timer
 	sigset_t set ;
 	sigfillset(&set);
@@ -146,10 +124,7 @@ struct sigaction act;
 			exit(1);
 		}	
 		
-		printf("il pacchetto arrivato:\n %d \n %d \n %d \n %d\n %s ",pac->seqnumb,pac->acknumb,pac->flags.ack,pac->flags.syn,pac->data);
-		printf("ackatteso: %dpac->ack:%d\n\n",ackatteso,pac->acknumb);
 		if(ackatteso == pac->acknumb && pac->flags.ack == 1){
-			printf("\nsuperato i controlli\n");
 			alarm(0); //azzero timer
 			if(strcmp( pac->data,"OK")==0)
 				return 0;
@@ -157,17 +132,28 @@ struct sigaction act;
 				return 1;
 		}
 		
-	}
-	
-	
-
-	
-	return 1;
-	
-	
-	
-	
-	
-	
+	}	
+	return 1;	
 }
 
+int  printfList(char *rfilename)
+{
+	FILE *rfile;
+	char *line;
+	char *token;
+	if ((rfile = fopen(rfilename, "r")) == NULL) {
+		printf("Unable to open file %s\n", rfilename);
+		exit(-1);
+	}
+	while (fscanf(rfile, "%m[^\n]", &line) != EOF)
+		{
+			fgetc(rfile);
+
+			token = strtok(line, " ");
+			printf("\n%s\n",line);
+
+			token = strtok(NULL, " ");
+			\
+		}
+	return 0;
+}
