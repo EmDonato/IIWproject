@@ -113,7 +113,6 @@ int rcv_prob(int socketID, struct sockaddr_in *add,int fileID,int32_t ackn,int32
 			}
 			else if(pacchetto.flags.ack == 0 && expectedack != pacchetto.seqnumb){
 				//rimada ultimo ack
-				printf("pacchetto arrivato fuori sequenza");
 				if (sendto(socketID, (const void *)&pacToSend, sizeof(packet), 0, (struct sockaddr *)add, sizeof(struct sockaddr_in)) < 0) {
 					perror("errore in sendto 1");
 					exit(1);
